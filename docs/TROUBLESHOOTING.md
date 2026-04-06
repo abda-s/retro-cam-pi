@@ -2,7 +2,47 @@
 
 Common issues and solutions for the RPi TFT Camera Display project.
 
+### Application won't exit with Ctrl+C
+- **PLANNED IMPROVEMENTS in v2.1.0**: Comprehensive signal handling overhaul
+- **Root Causes**: Picamera2 blocking operations don't respect signals, signal propagation issues, blocking queue operations
+- **Symptoms**: 
+  - Python tracebacks on Ctrl+C
+  - Workers don't stop cleanly
+  - Processes may hang or become zombies
+  - Resources not cleaned up
+- **Partial Fix in v2.0.2**: Improved KeyboardInterrupt handlers around blocking operations
+- **Planned Complete Fix**: Multi-layer signal handling with frequent shutdown checks
+- **Components**:
+  1. Global signal handler (sets shutdown flag immediately)
+  2. Worker-level signal handlers (redundant protection)
+  3. Frequent shutdown checks in all loops (every iteration)
+  4. Timeout-based queue operations (no indefinite blocking)
+  5. Enhanced stop_workers() with longer timeouts and terminate fallback
+- **Documentation**: See `docs/CTRL_C_SHUTDOWN.md` for detailed technical approach
+- **Implementation Plan**: See `docs/PLANNED_IMPROVEMENTS.md` for complete plan
+- **Expected Result**: Clean shutdown in 3-5 seconds, no tracebacks, all processes terminate
+
 ## 🔍 Quick Diagnosis
+
+### Problem: 't' Key Requires Enter (Pressing 't' Does Nothing)
+- **PLANNED FIX in v2.1.0**: Terminal raw mode implementation
+- **Root Cause**: Terminal in canonical (line-buffered) mode
+- **Symptom**: Pressing 't' alone does nothing, needs 't' + Enter
+- **Current Workaround**: Press 't' then Enter (works with current version)
+- **Solution**: Switch to raw terminal mode for character-by-character input
+- **Documentation**: See `docs/TERMINAL_RAW_MODE.md` for technical details
+- **Implementation Plan**: See `docs/PLANNED_IMPROVEMENTS.md` for complete plan
+
+### Problem: Capture Fails with "Queue Empty" Error
+- **PLANNED FIX in v2.1.0**: Shared memory buffer for last frame
+- **Root Cause**: capture_queue_save (Queue A) can be empty when user presses 't'
+- **Symptom**: "Warning: No frame available for capture (Queue A empty)"
+- **Impact**: User cannot capture images even though video is playing
+- **Solution**: Add shared memory array that always contains latest frame
+- **Benefits**: Capture always succeeds, no race conditions, faster frame access
+- **Memory Impact**: +231 KB (negligible with ~150MB available)
+- **Documentation**: See `docs/SHARED_MEMORY_BUFFER.md` for technical details
+- **Implementation Plan**: See `docs/PLANNED_IMPROVEMENTS.md` for complete plan
 
 ### Problem: Nothing works at all
 1. Check power supply is connected and providing adequate current

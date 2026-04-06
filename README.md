@@ -45,10 +45,70 @@ sudo ./setup.sh
 
 ### 3. Run the Application
 
+**Standard Version (Single-Threaded):**
 ```bash
 cd ~/rpi-tft-camera/src
 python3 camera_tft_display.py
 ```
+
+**Optimized Version (Multi-Core):**
+```bash
+cd ~/rpi-tft-camera/src
+python3 camera_tft_optimized.py
+```
+
+## 🔧 Known Issues and Planned Fixes
+
+### Issue 1: Terminal Line Buffering (Pressing 't' Requires Enter)
+**Current Problem:** Terminal is in canonical (line-buffered) mode, so pressing 't' alone does nothing. User must press 't' + Enter.
+
+**Planned Fix:** Switch to raw terminal mode during key detection
+- Disable line buffering (character-by-character input)
+- 't' key works immediately without Enter
+- Automatically restore terminal settings after key detection
+
+**Status:** 🔄 Planned (not yet implemented)
+**Documentation:** See `docs/TERMINAL_RAW_MODE.md` for technical details
+
+### Issue 2: Capture Queue Empty (Sometimes No Frame to Capture)
+**Current Problem:** When user presses 't', capture_queue_save (Queue A) might be empty, causing "No frame available for capture" error.
+
+**Planned Fix:** Add shared memory buffer for last frame
+- Worker stores latest 320x240 frame in shared numpy array
+- Main process always has access to latest frame
+- Never blocked by empty queue
+- Ensures capture always succeeds
+
+**Status:** 🔄 Planned (not yet implemented)
+**Documentation:** See `docs/SHARED_MEMORY_BUFFER.md` for technical details
+
+### Issue 3: Ctrl+C Not Working Cleanly
+**Current Problem:** Pressing Ctrl+C causes Python tracebacks and doesn't cleanly shutdown all processes.
+
+**Planned Fixes:**
+- Add proper KeyboardInterrupt handlers in all blocking operations
+- Use timeout-based queue operations (never block indefinitely)
+- Implement signal handlers in all worker processes
+- Add global shutdown flag with frequent checks
+
+**Status:** ✅ Partially Fixed (v2.0.2 improved but still issues)
+
+**Documentation:** See `docs/CTRL_C_SHUTDOWN.md` for details
+
+## 🔍 Debugging Assistance
+
+### Quick Kill During Development
+
+**If application hangs during testing:**
+```bash
+# Kill all Python processes immediately
+killall -9 python3
+
+# Or kill specifically:
+pkill -9 -f "camera_tft_optimized"
+```
+
+**For more debugging options, see `docs/DEBUGGING_ASSISTANCE.md`**
 
 ## 📖 Usage
 
