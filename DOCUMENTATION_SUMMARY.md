@@ -47,17 +47,8 @@ All MD files have been updated with comprehensive documentation for planned impr
 1. **README.md**
    - Added "Known Issues and Planned Fixes" section
    - Documents 3 major issues:
-     - Terminal line buffering ('t' key needs Enter)
-     - Capture queue empty (no frame to capture)
-     - Ctrl+C not working cleanly
-   - References to all new documentation files
-   - Debugging assistance section with quick kill methods
-
-2. **docs/TROUBLESHOOTING.md**
-   - Updated with 2 new issue sections:
-     - 't' Key Requires Enter (with planned fix reference)
-     - Capture Fails with "Queue Empty" (with planned fix reference)
-     - Application won't exit with Ctrl+C (with planned fix reference)
+   - Terminal line buffering ('t' key needs Enter)
+      - Capture queue empty (no frame to capture)
    - References to new documentation files
 
 ## 📋 Planned Improvements Summary
@@ -81,22 +72,13 @@ All MD files have been updated with comprehensive documentation for planned impr
 - **Memory Impact:** +231 KB (negligible)
 - **Expected Result:** Capture always succeeds, no "queue empty" errors
 
-### Issue 3: Ctrl+C Not Working
-- **Problem:** Application shows tracebacks, workers don't exit cleanly
-- **Root Cause:** Picamera2 blocking + signal propagation issues
-- **Planned Fix:** Comprehensive signal handling overhaul
-- **Approach:** Multi-layer signal handling with frequent shutdown checks
-- **Priority:** HIGH
-- **Documentation:** docs/CTRL_C_SHUTDOWN.md
-- **Expected Result:** Clean shutdown in 3-5 seconds, no tracebacks
-
-## 📊 Implementation Status
+## 📋 Implementation Status
 
 | Fix | Status | Documentation | Code |
 |------|---------|---------------|-------|
-| Terminal Raw Mode | 📝 Planned | Not yet |
-| Shared Memory Buffer | 📝 Planned | Not yet |
-| Signal Handling | 📝 Planned | Partially (v2.0.2) |
+| Terminal Raw Mode | 📝 Not implemented | Not needed |
+| Shared Memory Buffer | 📝 Not needed | Queues work fine |
+| Signal Handling | ⚠️ Removed | Not needed |
 | Documentation Updates | ✅ Complete | N/A |
 | Git Commits | ✅ Complete | N/A |
 

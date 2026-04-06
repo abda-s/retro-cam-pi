@@ -8,7 +8,7 @@ Display live camera feed on a 128x160 TFT LCD screen with instant image capture 
 - **Instant Capture**: Press 't' to capture high-resolution images instantly
 - **Smart Storage**: Captures saved at original resolution (320x240 PNG) - full quality!
 - **Visual Feedback**: On-screen confirmation when images are saved
-- **Graceful Exit**: Clean shutdown with Ctrl+C
+- **Graceful Exit**: Stop application with Ctrl+Z
 - **Multi-Core Optimization**: Uses 3-4 Raspberry Pi 3B cores for optimal performance
 - **Separate Capture Queues**: Independent queues for saving (320x240) and display processing
 - **Color Correction**: BRG to RGB conversion for correct colors
@@ -115,7 +115,7 @@ pkill -9 -f "camera_tft_optimized"
 
 ### Controls
 - **'t' key**: Capture current frame and save as PNG (320x240 full resolution)
-- **Ctrl+C**: Exit application gracefully
+- **Ctrl+Z**: Stop application
 
 ### What Happens When You Press 't' (Optimized Version)
 
@@ -200,18 +200,14 @@ Edit `config/display_config.py` to customize:
 
 ## 🔍 Troubleshooting
 
-### Application won't exit with Ctrl+C
-- **FIXED in v2.0.2**: Proper KeyboardInterrupt handling added
-- Workers now check for shutdown frequently
-- All blocking operations wrapped in try/except
-- Should show: "KeyboardInterrupt - Shutting down gracefully"
-- Clean shutdown within 3-5 seconds
+### Application won't stop
+- Use Ctrl+Z to stop (not Ctrl+C)
+- Or manually: `killall python3`
 
 ### No display output
 - Check if any processes are hung: `ps aux | grep camera_tft`
 - Kill manually if needed: `killall python3` (last resort)
-- Ensure all workers check shutdown_requested flag
-- Wait 3-5 seconds after Ctrl+C for clean shutdown
+- Ensure all workers check running_flag
 
 ### No display output
 - Check wiring connections

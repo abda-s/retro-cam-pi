@@ -2,25 +2,9 @@
 
 Common issues and solutions for the RPi TFT Camera Display project.
 
-### Application won't exit with Ctrl+C
-- **PLANNED IMPROVEMENTS in v2.1.0**: Comprehensive signal handling overhaul
-- **Root Causes**: Picamera2 blocking operations don't respect signals, signal propagation issues, blocking queue operations
-- **Symptoms**: 
-  - Python tracebacks on Ctrl+C
-  - Workers don't stop cleanly
-  - Processes may hang or become zombies
-  - Resources not cleaned up
-- **Partial Fix in v2.0.2**: Improved KeyboardInterrupt handlers around blocking operations
-- **Planned Complete Fix**: Multi-layer signal handling with frequent shutdown checks
-- **Components**:
-  1. Global signal handler (sets shutdown flag immediately)
-  2. Worker-level signal handlers (redundant protection)
-  3. Frequent shutdown checks in all loops (every iteration)
-  4. Timeout-based queue operations (no indefinite blocking)
-  5. Enhanced stop_workers() with longer timeouts and terminate fallback
-- **Documentation**: See `docs/CTRL_C_SHUTDOWN.md` for detailed technical approach
-- **Implementation Plan**: See `docs/PLANNED_IMPROVEMENTS.md` for complete plan
-- **Expected Result**: Clean shutdown in 3-5 seconds, no tracebacks, all processes terminate
+### Application won't stop
+- Use **Ctrl+Z** to stop (not Ctrl+C)
+- Or manually: `killall python3`
 
 ## 🔍 Quick Diagnosis
 

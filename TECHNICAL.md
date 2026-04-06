@@ -200,7 +200,6 @@ if select.select([sys.stdin], [], [], 0)[0]:
 - **Camera not found**: Display error message, allow manual camera check
 - **Display not responding**: Log error, attempt re-initialization
 - **SPI communication failure**: Log error, retry operation
-- **Keyboard interrupt**: Clean shutdown with resource cleanup
 
 ### User Input Errors
 - **Invalid key press**: Ignore non-'t' keys
