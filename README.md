@@ -13,7 +13,8 @@ Display live camera feed on a 128x160 TFT LCD screen with instant image capture 
 - **Separate Capture Queues**: Independent queues for saving (320x240) and display processing
 - **Color Correction**: BRG to RGB conversion for correct colors
 - **Display Rotation**: 180° rotation option for proper orientation
-- **FPS Optimized (v3.0.0)**: 40 MHz SPI, cv2 resize, ~30 FPS!
+- **FPS Optimized (v4.0.0)**: 40 MHz SPI, cv2 resize, ~30 FPS!
+- **Modular Architecture**: Clean separation of concerns with 7 modules
 
 ## 📋 Requirements
 
@@ -127,10 +128,33 @@ pkill -9 -f "camera_tft_optimized"
 ### Performance Comparison
 
 | Version | FPS | Cores | Memory | Features |
-|---------|-----|--------|---------|-----------|
+|---------|-----|--------|--------|-----------|
 | Standard | 8-10 | 1 (25%) | 6MB | Basic capture |
 | Optimized v2.1.x | 10-15 | 3-4 (75%) | 12MB | Multi-core, BILINEAR |
 | **v3.0.0** | **25-32** | **3-4 (75%)** | **12MB** | **40 MHz SPI, cv2 resize** |
+| **v4.0.0** | **25-32** | **3-4 (75%)** | **12MB** | **Modular architecture** |
+
+## 🏗️ Architecture (v4.0.0)
+
+The application is split into 7 independent modules for maintainability:
+
+| Module | Responsibility | Public API |
+|--------|----------------|------------|
+| `camera_worker.py` | Picamera2 capture, BGR→RGB swap | `capture_worker(...)` |
+| `process_worker.py` | cv2.resize for display | `process_worker(...)` |
+| `display_manager.py` | ST7735 init, display, cleanup | `DisplayManager` class |
+| `capture_manager.py` | Image save, feedback overlay | `CaptureManager` class |
+| `config_manager.py` | Config loading, env override | `Config` class |
+| `shared.py` | Queue sizes, SPI speeds, defaults | Constants |
+| `main.py` | Orchestration only | `main()` |
+
+### Process Architecture
+
+```
+Core 1: capture_worker  — picamera2 RGB888, BGR→RGB swap → queues
+Core 2: process_worker  — cv2.resize (INTER_LINEAR) → display_queue  
+Core 3+: main loop      — PIL convert + luma display @ 40 MHz
+```
 
 ## 🔧 Hardware Setup
 
@@ -170,24 +194,36 @@ rpi-tft-camera/
 ├── setup.sh                       # Main installation script
 ├── .gitignore                     # Git ignore patterns
 ├── src/
-│   ├── main.py                    # Main application (v3.0.0 - 30 FPS)
+│   ├── __init__.py                # Package init
+│   ├── main.py                    # Entry point (v4.0.0)
+│   ├── camera_worker.py           # Capture process
+│   ├── process_worker.py          # Resize process
+│   ├── display_manager.py        # ST7735 display handling
+│   ├── capture_manager.py        # Image capture/save
+│   ├── config_manager.py         # Configuration loader
+│   ├── shared.py                  # Constants and types
 │   └── requirements.txt           # Python dependencies
 ├── config/
-│   └── display_config.py          # Configuration parameters
+│   └── display_config.py          # Legacy config file
 └── docs/
     ├── WIRING.md                  # Complete wiring guide
-    └── TROUBLESHOOTING.md        # Common issues & solutions
+    └── TROUBLESHOOTING.md         # Common issues & solutions
 ```
 
 ## ⚙️ Configuration
 
-Edit `config/display_config.py` to customize:
+The application uses `src/config_manager.py` for configuration (with environment variable support).
 
-- Camera capture resolution
-- Display rotation
-- Save location and format
-- Performance settings
-- Error handling options
+To customize, edit `src/config_manager.py` or set environment variables:
+
+```bash
+export CAPTURE_RESOLUTION=640x480
+export DISPLAY_ROTATION=1
+export SPI_SPEED=40000000
+export SAVE_DIRECTORY=/home/cam/Pictures/captures
+```
+
+Legacy `config/display_config.py` is kept for reference but not used by v4.0.0.
 
 ## 🔍 Troubleshooting
 
@@ -256,5 +292,5 @@ For detailed technical information, see:
 
 ---
 
-**Version:** 3.0.0
+**Version:** 4.0.0
 **Last Updated:** 2026-04-06
