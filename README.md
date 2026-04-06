@@ -153,6 +153,12 @@ Edit `config/display_config.py` to customize:
 
 ## 🔍 Troubleshooting
 
+### Application won't exit with Ctrl+C
+- Check if any processes are hung: `ps aux | grep camera_tft`
+- Kill manually if needed: `killall python3` (last resort)
+- Ensure all workers check shutdown_requested flag
+- Wait 3-5 seconds after Ctrl+C for clean shutdown
+
 ### No display output
 - Check wiring connections
 - Verify SPI is enabled: `ls /dev/spi*`
@@ -162,11 +168,17 @@ Edit `config/display_config.py` to customize:
 - Verify camera connection: `rpicam-still -o test.jpg`
 - Check camera permissions: `groups cam` (should include video)
 - Ensure libcamera is installed: `rpicam-still --list-cameras`
+- Stop any other camera applications: `killall rpicam-still`
 
 ### Low performance
 - Lower capture resolution in `config/display_config.py`
 - Close other applications
 - Check CPU usage: `top`
+
+### High memory usage
+- Check queue sizes: Monitor "Queue Sizes" output
+- Reduce queue maxsize in script (currently 2 per queue)
+- Restart application periodically if needed
 
 For more detailed troubleshooting, see `docs/TROUBLESHOOTING.md`.
 

@@ -327,6 +327,61 @@ ulimit -a
 # Should have sufficient shared memory
 ```
 
+### Ctrl+C Not Working (Application Hangs)
+
+**Symptoms:**
+- Pressing Ctrl+C doesn't exit application
+- Processes continue running in background
+- Must kill with killall command
+
+**Solutions (Fixed in v2.0.2):**
+```bash
+# 1. Verify you're using latest version
+cd ~/rpi-tft-camera/src
+git pull
+python3 camera_tft_optimized.py
+
+# 2. Check signal handling
+# Latest version includes proper signal handlers for:
+#   - SIGINT (Ctrl+C)
+#   - SIGTERM (system shutdown)
+#   - Global shutdown_requested flag
+#   - Frequent shutdown checks in workers
+
+# 3. Force quit if absolutely necessary
+killall -9 python3
+# Use -9 (SIGKILL) as last resort
+
+# 4. Check for zombie processes
+ps aux | grep python3 | grep defunct
+# Kill zombie processes if found
+```
+
+**What was fixed:**
+- Added global `shutdown_requested` flag
+- Added signal handlers in all processes (main and workers)
+- Workers now check shutdown flag frequently
+- Queue operations use timeout/put_nowait() to prevent deadlocks
+- Enhanced stop_workers() with longer timeouts (3 seconds)
+- Better error handling in worker shutdown
+
+**Testing the fix:**
+```bash
+# 1. Start application
+python3 ~/rpi-tft-camera/src/camera_tft_optimized.py
+
+# 2. Wait for it to start (5 seconds)
+sleep 5
+
+# 3. Press Ctrl+C
+# Should show: "Shutdown signal received..."
+# All processes should stop within 3-5 seconds
+
+# 4. Verify all processes stopped
+ps aux | grep camera_tft_optimized
+# Should show no processes running
+```
+
 ## Performance Tuning
 
 ### Advanced Optimization Options
