@@ -1,31 +1,22 @@
 #!/usr/bin/env python3
 """
 RPi TFT Camera Display - Optimized Multi-Core Version
-Version: 2.1.0 - FPS-optimized (target: 11+ FPS)
+Version: 2.1.1 - Simplified (no signal handling)
 
-Key changes from 2.0.1:
-- LANCZOS → BILINEAR resize (3-5x faster, visually identical at 128x160)
-- Fixed feedback overlay: only composites when message is actually active
-- Fixed feedback_timer init: set to -999 so it's never "active" at start
-- display_queue.get timeout reduced to 0.005 (5ms) from 50ms
-- print() rate-limited to once per 5 seconds (not every second)
-- Removed redundant frame_lock around Value (Value is already process-safe)
-- stdin read made fully non-blocking
-- capture_array uses raw numpy path (no PIL until process worker)
-- queue.full() + get_nowait() pattern replaced with a single put_nowait + except Full
+Key changes from 2.1.0:
+- Removed signal handling (Ctrl+C not handled)
+- Simpler loop logic using running_flag only
+- Focus on performance only
 """
 
 import sys
 import select
 import time
 import os
-import signal
 from datetime import datetime
 from pathlib import Path
 from multiprocessing import Process, Queue, Value
 from queue import Full, Empty
-
-shutdown_requested = False
 
 try:
     from picamera2 import Picamera2
@@ -46,16 +37,7 @@ def capture_worker(capture_queue_save, capture_queue_display, capture_count, run
     Core 1: Camera capture + BRG→RGB swap.
     Pushes raw numpy arrays to both queues (no PIL here, keep it lean).
     """
-    global shutdown_requested
     camera = None
-
-    def _shutdown(signum, frame):
-        global shutdown_requested
-        shutdown_requested = True
-        running_flag.value = False
-
-    signal.signal(signal.SIGINT, _shutdown)
-    signal.signal(signal.SIGTERM, _shutdown)
 
     try:
         camera = Picamera2()
@@ -66,21 +48,16 @@ def capture_worker(capture_queue_save, capture_queue_display, capture_count, run
         camera.start()
         print(f"Capture worker started: {capture_resolution}")
 
-        while running_flag.value and not shutdown_requested:
+        while running_flag.value:
             try:
                 frame = camera.capture_array("main")
-            except KeyboardInterrupt:
-                break
             except Exception as e:
-                if not shutdown_requested:
-                    print(f"capture_array error: {e}")
+                print(f"capture_array error: {e}")
                 time.sleep(0.005)
                 continue
 
             # BRG → RGB: swap channels 0 and 2
-            # Use numpy view trick — no copy, just a remap
-            frame = frame[:, :, ::-1].copy()  # reverse all 3 channels (BGR→RGB)
-            # NOTE: original code did [2,1,0] which is the same as [::-1] on axis 2
+            frame = frame[:, :, ::-1].copy()
 
             # Push to save queue (drop oldest if full)
             try:
@@ -118,27 +95,10 @@ def capture_worker(capture_queue_save, capture_queue_display, capture_count, run
 def process_worker(capture_queue_display, display_queue, running_flag, display_size):
     """
     Core 2: Resize frames for display.
-    BILINEAR is used — visually indistinguishable from LANCZOS at 128x160
-    and 3-5x faster. NEAREST is even faster if you want to squeeze more FPS
-    at the cost of some aliasing.
     """
-    global shutdown_requested
-
-    def _shutdown(signum, frame):
-        global shutdown_requested
-        shutdown_requested = True
-        running_flag.value = False
-
-    signal.signal(signal.SIGINT, _shutdown)
-    signal.signal(signal.SIGTERM, _shutdown)
-
     print(f"Process worker started: target size {display_size}")
 
-    # Pre-allocate reusable PIL image to reduce GC pressure
-    # (We can't truly reuse since display needs a reference, but avoid
-    #  creating intermediate objects unnecessarily)
-
-    while running_flag.value and not shutdown_requested:
+    while running_flag.value:
         try:
             frame = capture_queue_display.get(timeout=0.1)
         except Empty:
@@ -147,15 +107,10 @@ def process_worker(capture_queue_display, display_queue, running_flag, display_s
             continue
 
         try:
-            # fromarray is fast — it wraps the numpy buffer, no copy
             frame_image = Image.fromarray(frame)
-
-            # BILINEAR: good quality, much faster than LANCZOS
-            # Switch to Image.NEAREST for maximum FPS if quality is acceptable
             frame_image = frame_image.resize(display_size, Image.Resampling.BILINEAR)
         except Exception as e:
-            if not shutdown_requested:
-                print(f"Process worker resize error: {e}")
+            print(f"Process worker resize error: {e}")
             continue
 
         # Push to display queue
@@ -177,11 +132,6 @@ class OptimizedCameraDisplay:
         self.display = None
         self.running = False
 
-        # feedback_timer = -999 ensures the overlay is NEVER active at startup.
-        # Original code used 0, which made time.time() - 0 always > 2.0... wait,
-        # actually the check is < 2.0, so at t=5s: 5-0=5 which is NOT < 2.0, so
-        # it's fine after 2 seconds. But at startup for the first 2 seconds it
-        # WILL composite a blank message. Using -999 skips that entirely.
         self.feedback_timer = -999.0
         self.feedback_message = ""
         self.last_error = ""
@@ -197,7 +147,7 @@ class OptimizedCameraDisplay:
         self.capture_queue_display = Queue(maxsize=2)
         self.display_queue = Queue(maxsize=2)
         self.running_flag = Value('b', True)
-        self.capture_count = Value('i', 0)  # Value is already process-safe, no Lock needed
+        self.capture_count = Value('i', 0)
 
     def initialize_hardware(self):
         try:
@@ -242,8 +192,6 @@ class OptimizedCameraDisplay:
 
     def stop_workers(self):
         print("Stopping workers...")
-        global shutdown_requested
-        shutdown_requested = True
         self.running_flag.value = False
 
         for proc, name in [(self.capture_process, "capture"), (self.process_process, "process")]:
@@ -269,7 +217,6 @@ class OptimizedCameraDisplay:
             image = Image.fromarray(frame)
             image.save(filename)
 
-            # Value('i') is atomic for single int increment
             self.capture_count.value += 1
             return True, filename
 
@@ -297,17 +244,8 @@ class OptimizedCameraDisplay:
             return
 
         self.running = True
-        print("\n=== Camera TFT Display (v2.1.0 - FPS optimized) ===")
-        print("Press 't' to capture | Ctrl+C to exit\n")
-
-        def _shutdown(signum, frame):
-            print("\nShutdown signal received...")
-            self.running = False
-            global shutdown_requested
-            shutdown_requested = True
-
-        signal.signal(signal.SIGINT, _shutdown)
-        signal.signal(signal.SIGTERM, _shutdown)
+        print("\n=== Camera TFT Display (v2.1.1 - FPS optimized, no signal handling) ===")
+        print("Press 't' + Enter to capture | Ctrl+Z to stop\n")
 
         self.start_workers()
         time.sleep(0.5)
@@ -316,44 +254,37 @@ class OptimizedCameraDisplay:
         last_fps_print = time.time()
         fps_display = 0.0
 
-        # Pre-build the overlay image once, update text on it when needed
-        # This avoids creating a new RGBA image every frame during feedback
         feedback_overlay = None
-        feedback_overlay_active = False
 
         try:
-            while self.running and not shutdown_requested:
+            while self.running:
                 loop_start = time.time()
 
-                # --- Input handling ---
+                # Input handling
                 if self.check_for_capture():
                     success, filename = self.capture_image()
                     if success:
                         print(f"✓ Saved: {filename}")
                         self.display_feedback("Saved!")
-                        feedback_overlay = None  # Rebuild overlay next frame
+                        feedback_overlay = None
                     else:
                         print(f"✗ Failed: {self.last_error}")
                         self.display_feedback("Error!")
                         feedback_overlay = None
 
-                # --- Get display frame ---
+                # Get display frame
                 try:
-                    # 5ms timeout: short enough to not cap FPS, long enough
-                    # to not spin-waste CPU when queue is briefly empty
                     frame_image = self.display_queue.get(timeout=0.005)
                 except Empty:
-                    # No frame yet — don't count this as a frame time sample
                     continue
                 except Exception:
                     continue
 
-                # --- Feedback overlay (only when actually active) ---
+                # Feedback overlay
                 now = time.time()
                 feedback_active = (now - self.feedback_timer) < 2.0
 
                 if feedback_active:
-                    # Build overlay only once per feedback event
                     if feedback_overlay is None:
                         overlay_img = Image.new('RGBA', frame_image.size, (0, 0, 0, 100))
                         draw_ov = ImageDraw.Draw(overlay_img)
@@ -361,23 +292,21 @@ class OptimizedCameraDisplay:
                         draw_ov.text((5, 20), f"#{self.capture_count.value}", fill=(255, 255, 255, 200))
                         feedback_overlay = overlay_img
 
-                    # Composite onto the current frame
                     frame_image = Image.alpha_composite(
                         frame_image.convert('RGBA'), feedback_overlay
                     ).convert('RGB')
                 else:
-                    feedback_overlay = None  # Clear when expired
+                    feedback_overlay = None
 
-                # --- Push to TFT ---
+                # Push to TFT
                 self.display.display(frame_image)
 
-                # --- FPS tracking (minimal overhead) ---
+                # FPS tracking
                 frame_time = time.time() - loop_start
                 frame_times.append(frame_time)
                 if len(frame_times) > 30:
                     frame_times.pop(0)
 
-                # Print status every 5 seconds — not every second
                 if now - last_fps_print >= 5.0:
                     avg_time = sum(frame_times) / len(frame_times) if frame_times else 1
                     fps_display = 1.0 / avg_time if avg_time > 0 else 0
@@ -390,8 +319,6 @@ class OptimizedCameraDisplay:
                     )
                     last_fps_print = now
 
-        except KeyboardInterrupt:
-            print("\nKeyboardInterrupt — shutting down...")
         except Exception as e:
             print(f"\nFatal error: {e}")
             self.show_error_on_display("Fatal Error")
