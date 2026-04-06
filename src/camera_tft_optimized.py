@@ -70,8 +70,12 @@ def capture_worker(capture_queue_save, capture_queue_display, capture_count, run
                 if shutdown_requested:
                     break
                 
-                # Capture frame as numpy array
-                frame = camera.capture_array("main")
+                # Capture frame as numpy array with interrupt handling
+                try:
+                    frame = camera.capture_array("main")
+                except KeyboardInterrupt:
+                    print("Capture interrupted during capture_array")
+                    break
                 
                 # Fix color issue: swap R and B channels (BRG -> RGB)
                 # OV5647 camera uses SGBRG10 pattern, need to swap channels
@@ -148,20 +152,32 @@ def process_worker(capture_queue_display, display_queue, running_flag, display_s
         
         while running_flag.value and not shutdown_requested:
             try:
+                # Check for shutdown frequently
+                if shutdown_requested:
+                    break
+                
                 # Get full-res frame from capture queue (with timeout to allow graceful exit)
                 try:
                     frame = capture_queue_display.get(timeout=0.1)
                 except:
                     continue
                 
-                # Convert numpy array to PIL Image
-                frame_image = Image.fromarray(frame)
+                # Convert numpy array to PIL Image with interrupt handling
+                try:
+                    frame_image = Image.fromarray(frame)
+                except KeyboardInterrupt:
+                    print("Process interrupted during PIL conversion")
+                    break
                 
-                # Resize to display resolution (stretch)
-                frame_image = frame_image.resize(
-                    display_size,
-                    Image.Resampling.LANCZOS
-                )
+                # Resize to display resolution (stretch) with interrupt handling
+                try:
+                    frame_image = frame_image.resize(
+                        display_size,
+                        Image.Resampling.LANCZOS
+                    )
+                except KeyboardInterrupt:
+                    print("Process interrupted during resize")
+                    break
                 
                 # Put processed frame in display queue
                 try:
@@ -457,7 +473,7 @@ class OptimizedCameraDisplay:
                     last_fps_update = current_time
 
         except KeyboardInterrupt:
-            print("\n\n=== Shutting down gracefully ===")
+            print("\n\nKeyboardInterrupt - Shutting down gracefully ===")
         except Exception as e:
             print(f"\nERROR: Unexpected error: {e}")
             self.show_error_on_display("Fatal Error")
