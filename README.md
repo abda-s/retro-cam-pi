@@ -13,7 +13,7 @@ Display live camera feed on a 128x160 TFT LCD screen with instant image capture 
 - **Separate Capture Queues**: Independent queues for saving (320x240) and display processing
 - **Color Correction**: BRG to RGB conversion for correct colors
 - **Display Rotation**: 180° rotation option for proper orientation
-- **FPS Optimized (v2.1.0)**: BILINEAR resize, 5ms queue timeout, rate-limited logging
+- **FPS Optimized (v2.1.1)**: BILINEAR resize, 5ms queue timeout, no signal handling
 
 ## 📋 Requirements
 
@@ -138,7 +138,7 @@ pkill -9 -f "camera_tft_optimized"
 |---------|-----|--------|---------|-----------|
 | Standard | 8-10 | 1 (25%) | 6MB | Basic capture |
 | Optimized v2.0.x | 10-12 | 3-4 (75%) | 12MB | Multi-core, separate queues |
-| Optimized v2.1.0 | 10-15 | 3-4 (75%) | 12MB | FPS-optimized, BILINEAR resize |
+| Optimized v2.1.x | 10-15 | 3-4 (75%) | 12MB | FPS-optimized, BILINEAR, no signal handling |
 
 ## 🔧 Hardware Setup
 
@@ -276,5 +276,5 @@ For detailed technical information, see:
 
 ---
 
-**Version:** 2.1.0
+**Version:** 2.1.1
 **Last Updated:** 2026-04-06
