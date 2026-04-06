@@ -45,7 +45,7 @@ class CameraDisplay:
         # 1 = 90° (landscape: 160x128)
         # 2 = 180° (portrait upside down: 128x160)
         # 3 = 270° (landscape upside down: 160x128)
-        self.display_rotation = 0  # Try 0, 1, 2, or 3 to find correct orientation
+        self.display_rotation = 2  # 180° rotation (upside down from normal)
         
         self.save_directory = Path.home() / "Pictures" / "captures"
         self.save_directory.mkdir(parents=True, exist_ok=True)
