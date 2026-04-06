@@ -129,14 +129,15 @@ All MD files have been updated with comprehensive documentation for planned impr
 ## 📞 Quick Reference
 
 ### Current Version Status:
-- **Version:** v2.0.2
-- **Status:** Multi-core optimization working (12-18 FPS)
-- **Issues Remaining:** Terminal buffering, queue empty, Ctrl+C cleanup
+- **Version:** v2.1.0
+- **Status:** FPS-optimized (10-15 FPS)
+- **Key Changes:** BILINEAR resize, 5ms queue timeout, rate-limited logging, fixed feedback overlay
+- **Issues Remaining:** Terminal buffering (requires Enter key)
 
 ### Target Version:
-- **Version:** v2.1.0
-- **Status:** All planned fixes implemented
-- **Expected:** Clean input, reliable capture, graceful shutdown
+- **Version:** v2.1.1
+- **Status:** Future improvements (if needed)
+- **Expected:** Further optimizations if performance issues arise
 
 ### Documentation Coverage:
 - **5 new docs created** with detailed technical specifications
@@ -146,5 +147,5 @@ All MD files have been updated with comprehensive documentation for planned impr
 ---
 
 **Last Updated:** 2026-04-06
-**Documentation Status:** ✅ Complete (all planned improvements documented)
-**Implementation Status:** 🔄 Not yet (documentation only)
+**Documentation Status:** ✅ Complete
+**Implementation Status:** ✅ Implemented (v2.1.0)

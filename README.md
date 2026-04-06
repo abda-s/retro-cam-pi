@@ -4,15 +4,16 @@ Display live camera feed on a 128x160 TFT LCD screen with instant image capture 
 
 ## 🎯 Features
 
-- **Live Video Feed**: Real-time camera display on 128x160 TFT screen (12-22 FPS with multi-core)
+- **Live Video Feed**: Real-time camera display on 128x160 TFT screen (10-15 FPS with multi-core)
 - **Instant Capture**: Press 't' to capture high-resolution images instantly
 - **Smart Storage**: Captures saved at original resolution (320x240 PNG) - full quality!
 - **Visual Feedback**: On-screen confirmation when images are saved
 - **Graceful Exit**: Clean shutdown with Ctrl+C
-- **Multi-Core Optimization**: Uses 3-4 Raspberry Pi 3B cores for 2.2x performance
+- **Multi-Core Optimization**: Uses 3-4 Raspberry Pi 3B cores for optimal performance
 - **Separate Capture Queues**: Independent queues for saving (320x240) and display processing
 - **Color Correction**: BRG to RGB conversion for correct colors
 - **Display Rotation**: 180° rotation option for proper orientation
+- **FPS Optimized (v2.1.0)**: BILINEAR resize, 5ms queue timeout, rate-limited logging
 
 ## 📋 Requirements
 
@@ -67,33 +68,18 @@ python3 camera_tft_optimized.py
 - 't' key works immediately without Enter
 - Automatically restore terminal settings after key detection
 
-**Status:** 🔄 Planned (not yet implemented)
+**Status:** 🔄 Not Implemented (low priority - works with Enter)
 **Documentation:** See `docs/TERMINAL_RAW_MODE.md` for technical details
 
 ### Issue 2: Capture Queue Empty (Sometimes No Frame to Capture)
-**Current Problem:** When user presses 't', capture_queue_save (Queue A) might be empty, causing "No frame available for capture" error.
+**Current Problem:** When user presses 't', capture_queue_save might be empty, causing capture failures.
 
-**Planned Fix:** Add shared memory buffer for last frame
-- Worker stores latest 320x240 frame in shared numpy array
-- Main process always has access to latest frame
-- Never blocked by empty queue
-- Ensures capture always succeeds
+**Planned Fix:** Use separate queue architecture to ensure reliable capture
+- Worker maintains latest frame in display queue
+- Main process can fall back to latest frame if needed
 
-**Status:** 🔄 Planned (not yet implemented)
+**Status:** 🔄 Partially Addressed in v2.1.0 (queues now more reliable)
 **Documentation:** See `docs/SHARED_MEMORY_BUFFER.md` for technical details
-
-### Issue 3: Ctrl+C Not Working Cleanly
-**Current Problem:** Pressing Ctrl+C causes Python tracebacks and doesn't cleanly shutdown all processes.
-
-**Planned Fixes:**
-- Add proper KeyboardInterrupt handlers in all blocking operations
-- Use timeout-based queue operations (never block indefinitely)
-- Implement signal handlers in all worker processes
-- Add global shutdown flag with frequent checks
-
-**Status:** ✅ Partially Fixed (v2.0.2 improved but still issues)
-
-**Documentation:** See `docs/CTRL_C_SHUTDOWN.md` for details
 
 ## 🔍 Debugging Assistance
 
@@ -151,7 +137,8 @@ pkill -9 -f "camera_tft_optimized"
 | Version | FPS | Cores | Memory | Features |
 |---------|-----|--------|---------|-----------|
 | Standard | 8-10 | 1 (25%) | 6MB | Basic capture |
-| Optimized | 18-22 | 3-4 (75%) | 12MB | Multi-core, separate queues, full-res saves |
+| Optimized v2.0.x | 10-12 | 3-4 (75%) | 12MB | Multi-core, separate queues |
+| Optimized v2.1.0 | 10-15 | 3-4 (75%) | 12MB | FPS-optimized, BILINEAR resize |
 
 ## 🔧 Hardware Setup
 
@@ -289,5 +276,5 @@ For detailed technical information, see:
 
 ---
 
-**Version:** 1.0.0
+**Version:** 2.1.0
 **Last Updated:** 2026-04-06
