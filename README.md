@@ -13,8 +13,9 @@ Display live camera feed on a 128x160 TFT LCD screen with instant image capture 
 - **Separate Capture Queues**: Independent queues for saving (320x240) and display processing
 - **Color Correction**: BRG to RGB conversion for correct colors
 - **Display Rotation**: 180° rotation option for proper orientation
-- **FPS Optimized (v4.0.0)**: 40 MHz SPI, cv2 resize, ~30 FPS!
-- **Modular Architecture**: Clean separation of concerns with 7 modules
+- **FPS Optimized (v4.1.0)**: 40 MHz SPI, cv2 resize, ~30 FPS!
+- **Video Recording**: Press 'v' to record video with audio (USB mic)
+- **Modular Architecture**: Clean separation of concerns with 8 modules
 
 ## 📋 Requirements
 
@@ -108,6 +109,7 @@ pkill -9 -f "camera_tft_optimized"
 
 ### Controls
 - **'t' key**: Capture current frame and save as PNG (320x240 full resolution)
+- **'v' key**: Start/stop video recording (640x480 with audio)
 - **Ctrl+Z**: Stop application
 
 ### What Happens When You Press 't' (Optimized Version)
@@ -118,12 +120,21 @@ pkill -9 -f "camera_tft_optimized"
 4. "Saved!" message appears on screen
 5. Live feed continues without interruption
 
+### What Happens When You Press 'v'
+
+1. First press: Start video recording with audio
+   - "REC" indicator appears on TFT (blinking red dot + timer)
+   - Video saved to `~/Pictures/captures/video_YYYYMMDD_HHMMSS.mkv`
+2. Second press: Stop recording
+   - "Video Saved!" message appears on screen
+   - Video file finalizes
+
 ### File Storage
 
 - **Location**: `~/Pictures/captures/`
-- **Format**: PNG (lossless)
-- **Resolution**: 320x240 (original capture resolution - full quality!)
-- **Naming**: `capture_YYYYMMDD_HHMMSS.png`
+- **Images**: PNG (320x240), naming: `capture_YYYYMMDD_HHMMSS.png`
+- **Videos**: MKV (640x480), naming: `video_YYYYMMDD_HHMMSS.mkv`
+- **Audio**: USB mic (hw:2,0), AAC codec
 
 ### Performance Comparison
 
@@ -133,10 +144,11 @@ pkill -9 -f "camera_tft_optimized"
 | Optimized v2.1.x | 10-15 | 3-4 (75%) | 12MB | Multi-core, BILINEAR |
 | **v3.0.0** | **25-32** | **3-4 (75%)** | **12MB** | **40 MHz SPI, cv2 resize** |
 | **v4.0.0** | **25-32** | **3-4 (75%)** | **12MB** | **Modular architecture** |
+| **v4.1.0** | **25-32** | **3-4 (75%)** | **12MB** | **Video + audio recording** |
 
 ## 🏗️ Architecture (v4.0.0)
 
-The application is split into 7 independent modules for maintainability:
+The application is split into 8 independent modules for maintainability:
 
 | Module | Responsibility | Public API |
 |--------|----------------|------------|
@@ -144,6 +156,7 @@ The application is split into 7 independent modules for maintainability:
 | `process_worker.py` | cv2.resize for display | `process_worker(...)` |
 | `display_manager.py` | ST7735 init, display, cleanup | `DisplayManager` class |
 | `capture_manager.py` | Image save, feedback overlay | `CaptureManager` class |
+| `video_recorder.py` | Video recording with audio | `VideoRecorder` class |
 | `config_manager.py` | Config loading, env override | `Config` class |
 | `shared.py` | Queue sizes, SPI speeds, defaults | Constants |
 | `main.py` | Orchestration only | `main()` |
@@ -154,6 +167,7 @@ The application is split into 7 independent modules for maintainability:
 Core 1: capture_worker  — picamera2 RGB888, BGR→RGB swap → queues
 Core 2: process_worker  — cv2.resize (INTER_LINEAR) → display_queue  
 Core 3+: main loop      — PIL convert + luma display @ 40 MHz
+       + video_recorder — FfmpegOutput with ALSA audio input
 ```
 
 ## 🔧 Hardware Setup

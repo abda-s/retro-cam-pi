@@ -27,6 +27,10 @@ apt install -y python3-picamera2 python3-luma.lcd python3-luma.core python3-spid
 echo "[3/6] Installing OpenCV..."
 apt install -y python3-opencv
 
+# Install FFmpeg for video recording with audio (v4.1.0+)
+echo "[3.5/6] Installing FFmpeg..."
+apt install -y ffmpeg
+
 # Install additional Picamera2 dependencies
 echo "[4/6] Installing Picamera2 dependencies..."
 apt install -y python3-av python3-libcamera python3-jsonschema python3-libarchive-c python3-openexr python3-pidng python3-piexif python3-prtl python3-simplejpeg python3-tqdm python3-videodev2 python3-kms++

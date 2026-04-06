@@ -36,6 +36,15 @@ class Config:
         # Feedback settings
         self.feedback_duration: float = 2.0
 
+        # Video recording settings
+        self.video_resolution: Tuple[int, int] = (640, 480)
+        self.video_bitrate: int = 3_000_000  # 3 Mbps
+        self.video_codec: str = "h264"
+        self.video_format: str = "mkv"
+        self.audio_device: str = "default"  # PulseAudio default input (USB mic)
+        self.audio_enabled: bool = True
+        self.audio_sync: float = -0.3  # Audio sync offset in seconds
+
         # Ensure save directory exists
         self.save_directory.mkdir(parents=True, exist_ok=True)
 
@@ -44,8 +53,12 @@ class Config:
         return (self.display_resolution[0], self.display_resolution[1])
 
     def get_capture_size(self) -> Tuple[int, int]:
-        """Get capture width and height."""
+        """Get capture resolution."""
         return self.capture_resolution
+
+    def get_video_size(self) -> Tuple[int, int]:
+        """Get video recording resolution."""
+        return self.video_resolution
 
 
 class ConfigLoader:
