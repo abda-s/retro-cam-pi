@@ -1,47 +1,33 @@
 #!/usr/bin/env python3
 """
 RPi TFT Camera Display - Modular Version
-Version: 4.1.0 - Added video recording with audio
+Version: 4.2.0 - Dual encoder (H264 for video + lores for display)
 
-Architecture (3 processes):
-  Core 1: capture_worker  — picamera2 RGB888, BGR→RGB swap
-  Core 2: process_worker  — cv2.resize (INTER_LINEAR)
-  Core 3+: main loop      — PIL convert + luma display @ 40 MHz
-
-Module Structure:
-  - camera_worker.py    : Capture process
-  - process_worker.py   : Resize process
-  - display_manager.py : ST7735 TFT handling
-  - capture_manager.py : Image save/count
-  - video_recorder.py  : Video recording with audio
-  - config_manager.py  : Configuration loader
-  - shared.py          : Constants
-  - main.py            : Orchestration
-
-Controls:
-  - 't' + Enter: Capture image
-  - 'v' + Enter: Start/stop video recording
-  - Ctrl+Z: Stop application
+Uses Picamera2's dual encoder feature:
+  - H264 encoder for video recording (proper timing)
+  - Lores stream for TFT display
 """
 
 import sys
 import select
 import time
 import os
+from datetime import datetime
 from multiprocessing import Process, Queue, Value
 from queue import Empty
+from pathlib import Path
 from typing import Tuple
 
 try:
     from PIL import Image, ImageDraw
 except ImportError:
-    print("Error: PIL not found. Run: pip3 install pillow --break-system-packages")
+    print("Error: PIL not found")
     sys.exit(1)
 
 try:
     import numpy as np
 except ImportError:
-    print("Error: numpy not found. Run: pip3 install numpy")
+    print("Error: numpy not found")
     sys.exit(1)
 
 # Import project modules
@@ -49,7 +35,6 @@ from camera_worker import capture_worker
 from process_worker import process_worker
 from display_manager import DisplayManager
 from capture_manager import CaptureManager
-from video_recorder import VideoRecorder
 from config_manager import Config
 
 
@@ -57,11 +42,6 @@ class CameraTFTApp:
     """Main application class for camera TFT display."""
 
     def __init__(self, config: Config):
-        """Initialize application with configuration.
-
-        Args:
-            config: Configuration object
-        """
         self._config = config
         self._running = False
 
@@ -75,7 +55,7 @@ class CameraTFTApp:
             spi_speed_hz=config.spi_speed_hz,
         )
 
-        # Capture manager
+        # Capture manager (for images)
         self._capture_manager = CaptureManager(
             save_directory=config.save_directory,
             capture_resolution=config.capture_resolution,
@@ -84,71 +64,64 @@ class CameraTFTApp:
             feedback_duration=config.feedback_duration,
         )
 
-        # Video recorder
-        self._video_recorder = VideoRecorder(
-            save_directory=config.save_directory,
-            video_resolution=config.video_resolution,
-            video_bitrate=config.video_bitrate,
-            audio_device=config.audio_device,
-            audio_enabled=config.audio_enabled,
-            audio_sync=config.audio_sync,
-            timestamp_format=config.timestamp_format,
-        )
-
         # Worker processes
         self._capture_process: Process = None
         self._process_process: Process = None
 
         # Queues
-        self._capture_queue_save = Queue(maxsize=config.queue_maxsize)
         self._capture_queue_display = Queue(maxsize=config.queue_maxsize)
         self._display_queue = Queue(maxsize=config.queue_maxsize)
 
         # Shared flags
         self._running_flag = Value('b', True)
         self._capture_count = Value('i', 0)
+        
+        # Video recording control
+        # 0 = idle, 1 = start recording, 2 = stop recording
+        self._video_flag = Value('i', 0)
+        
+        # Image capture control
+        # 0 = idle, 1 = capture
+        self._image_capture_flag = Value('i', 0)
 
         # Overlay state
         self._feedback_overlay = None
+        self._video_overlay = None
 
         # FPS tracking
         self._frame_times = []
         self._last_fps_print = 0.0
+        
+        # Video recording state
+        self._is_recording = False
+        self._recording_start_time = 0.0
 
     def initialize(self) -> bool:
-        """Initialize hardware (display and video recorder).
-
-        Returns:
-            True if initialization successful
-        """
-        if not self._display_manager.initialize():
-            return False
-
-        # Initialize video recorder (but don't start recording)
-        if not self._video_recorder.initialize(self._config.capture_resolution):
-            print(f"Warning: Video recorder init failed: {self._video_recorder.last_error}")
-
-        return True
+        """Initialize hardware (display)."""
+        return self._display_manager.initialize()
 
     def start_workers(self) -> None:
         """Start worker processes."""
         print("\nStarting workers...")
 
-        # Capture worker (Core 1)
+        # Capture worker with dual stream support
         self._capture_process = Process(
             target=capture_worker,
             args=(
-                self._capture_queue_save,
                 self._capture_queue_display,
                 self._capture_count,
                 self._running_flag,
-                self._config.capture_resolution,
+                self._video_flag,
+                self._image_capture_flag,
+                self._config.video_resolution,  # main stream for video
+                self._config.capture_resolution,  # lores for display
+                self._config.save_directory,
             )
         )
         self._capture_process.start()
-        print("✓ Capture worker (Core 1) — RGB888 + BGR→RGB swap")
+        print(f"✓ Capture worker (Core 1) — video={self._config.video_resolution}, display={self._config.capture_resolution}")
 
-        # Process worker (Core 2)
+        # Process worker for display resize
         display_size = self._display_manager.size
         self._process_process = Process(
             target=process_worker,
@@ -175,18 +148,13 @@ class CameraTFTApp:
             if proc:
                 proc.join(timeout=3)
                 if proc.is_alive():
-                    print(f"Terminating {name} worker...")
                     proc.terminate()
                     proc.join(timeout=1)
 
         print("All workers stopped")
 
     def check_for_input(self) -> str:
-        """Check for key input (non-blocking).
-
-        Returns:
-            Key pressed ('t', 'v', or '' for none)
-        """
+        """Check for key input (non-blocking)."""
         if select.select([sys.stdin], [], [], 0)[0]:
             try:
                 key = os.read(sys.stdin.fileno(), 1)
@@ -200,23 +168,11 @@ class CameraTFTApp:
         return ''
 
     def show_error(self, message: str) -> None:
-        """Show error message on display.
-
-        Args:
-            message: Error message
-        """
+        """Show error message on display."""
         self._display_manager.show_error(message)
 
     def _create_video_overlay(self, frame_size: Tuple[int, int], duration: float) -> Image.Image:
-        """Create video recording overlay.
-
-        Args:
-            frame_size: Size of the frame (width, height)
-            duration: Recording duration in seconds
-
-        Returns:
-            PIL Image with overlay
-        """
+        """Create video recording overlay."""
         overlay_img = Image.new('RGBA', frame_size, (0, 0, 0, 100))
         draw = ImageDraw.Draw(overlay_img)
 
@@ -240,11 +196,11 @@ class CameraTFTApp:
             return
 
         self._running = True
-        print("\n=== Camera TFT Display (v4.1.0 - Video) ===")
+        print("\n=== Camera TFT Display (v4.2.0 - Dual Encoder) ===")
         print("Press 't' + Enter to capture | Press 'v' + Enter to start/stop video | Ctrl+Z to stop\n")
 
         self.start_workers()
-        time.sleep(0.5)
+        time.sleep(1.0)
 
         self._last_fps_print = time.time()
 
@@ -256,38 +212,26 @@ class CameraTFTApp:
                 key = self.check_for_input()
 
                 if key == 't':
-                    # Capture image
-                    success, filename = self._capture_manager.capture_image(
-                        self._capture_queue_save,
-                        self._capture_queue_display,
-                        self._capture_count,
-                    )
-                    if success:
-                        print(f"✓ Saved: {filename}")
-                        self._capture_manager.set_feedback("Saved!")
-                        self._feedback_overlay = None
-                    else:
-                        print(f"✗ Failed: {self._capture_manager.last_error}")
-                        self._capture_manager.set_feedback("Error!")
-                        self._feedback_overlay = None
+                    # Image capture - trigger the capture via flag
+                    self._image_capture_flag.value = 1
+                    # Note: actual save happens in capture_worker
+                    print("Capturing image...")
 
                 elif key == 'v':
                     # Toggle video recording
-                    if self._video_recorder.is_recording:
-                        success, filename = self._video_recorder.stop_recording()
-                        if success:
-                            print(f"✓ Video saved: {filename}")
-                            self._capture_manager.set_feedback("Video Saved!")
-                            self._feedback_overlay = None
-                        else:
-                            print(f"✗ Video failed: {self._video_recorder.last_error}")
-                            self._capture_manager.set_feedback("Video Error!")
-                            self._feedback_overlay = None
+                    if self._is_recording:
+                        # Stop recording
+                        self._video_flag.value = 2
+                        self._is_recording = False
+                        print("Video recording stopped")
+                        self._capture_manager.set_feedback("Video Saved!")
+                        self._feedback_overlay = None
                     else:
-                        if self._video_recorder.start_recording():
-                            print("Recording started...")
-                        else:
-                            print(f"✗ Failed to start: {self._video_recorder.last_error}")
+                        # Start recording
+                        self._video_flag.value = 1
+                        self._is_recording = True
+                        self._recording_start_time = time.time()
+                        print("Recording started...")
 
                 # Get resized frame from display queue
                 try:
@@ -300,12 +244,10 @@ class CameraTFTApp:
                 # Convert numpy array to PIL Image
                 frame_image = Image.fromarray(frame_rgb)
 
-                # Handle video recording overlay (show on top of everything)
-                if self._video_recorder.is_recording:
-                    video_overlay = self._create_video_overlay(
-                        frame_image.size,
-                        self._video_recorder.recording_duration
-                    )
+                # Handle video recording overlay
+                if self._is_recording:
+                    rec_duration = time.time() - self._recording_start_time
+                    video_overlay = self._create_video_overlay(frame_image.size, rec_duration)
                     frame_image = Image.alpha_composite(
                         frame_image.convert('RGBA'), video_overlay
                     ).convert('RGB')
@@ -340,10 +282,9 @@ class CameraTFTApp:
                     avg_time = sum(self._frame_times) / len(self._frame_times) if self._frame_times else 1
                     fps = 1.0 / avg_time if avg_time > 0 else 0
                     
-                    # Build status string
                     status = f"FPS: {fps:.1f} | Captures: {self._capture_count.value}"
-                    if self._video_recorder.is_recording:
-                        rec_duration = int(self._video_recorder.recording_duration)
+                    if self._is_recording:
+                        rec_duration = int(time.time() - self._recording_start_time)
                         status += f" | REC: {rec_duration}s"
                     
                     print(status)
@@ -353,9 +294,9 @@ class CameraTFTApp:
             print(f"\nFatal error: {e}")
             self.show_error("Fatal Error")
         finally:
-            # Stop video recording if active
-            if self._video_recorder.is_recording:
-                self._video_recorder.stop_recording()
+            # Stop video if recording
+            if self._is_recording:
+                self._video_flag.value = 2
             
             self.stop_workers()
             self.cleanup()
@@ -363,15 +304,9 @@ class CameraTFTApp:
     def cleanup(self) -> None:
         """Clean up resources."""
         print("Cleaning up...")
-        
-        # Clean up video recorder
-        self._video_recorder.cleanup()
-        
-        # Clean up display
         self._display_manager.cleanup()
-        
         print(f"Total captures: {self._capture_count.value}")
-        print(f"Saved to: {self._capture_manager.save_directory}")
+        print(f"Saved to: {self._config.save_directory}")
         print("Done.")
 
 

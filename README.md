@@ -13,8 +13,9 @@ Display live camera feed on a 128x160 TFT LCD screen with instant image capture 
 - **Separate Capture Queues**: Independent queues for saving (320x240) and display processing
 - **Color Correction**: BRG to RGB conversion for correct colors
 - **Display Rotation**: 180° rotation option for proper orientation
-- **FPS Optimized (v4.1.0)**: 40 MHz SPI, cv2 resize, ~30 FPS!
-- **Video Recording**: Press 'v' to record video with audio (USB mic)
+- **FPS Optimized (v4.2.0)**: 40 MHz SPI, cv2 resize, ~30 FPS!
+- **Video Recording**: Press 'v' to record video (H264, non-blocking with CircularOutput2)
+- **Dual Stream**: Main stream (640x480) for video, Lores stream (320x240) for display
 - **Modular Architecture**: Clean separation of concerns with 8 modules
 
 ## 📋 Requirements
@@ -144,9 +145,10 @@ pkill -9 -f "camera_tft_optimized"
 | Optimized v2.1.x | 10-15 | 3-4 (75%) | 12MB | Multi-core, BILINEAR |
 | **v3.0.0** | **25-32** | **3-4 (75%)** | **12MB** | **40 MHz SPI, cv2 resize** |
 | **v4.0.0** | **25-32** | **3-4 (75%)** | **12MB** | **Modular architecture** |
-| **v4.1.0** | **25-32** | **3-4 (75%)** | **12MB** | **Video + audio recording** |
+| **v4.1.0** | **25-32** | **3-4 (75%)** | **12MB** | **Video recording (initial)** |
+| **v4.2.0** | **25-32** | **3-4 (75%)** | **12MB** | **Dual stream, CircularOutput2** |
 
-## 🏗️ Architecture (v4.0.0)
+## 🏗️ Architecture (v4.2.0)
 
 The application is split into 8 independent modules for maintainability:
 
@@ -306,5 +308,5 @@ For detailed technical information, see:
 
 ---
 
-**Version:** 4.0.0
+**Version:** 4.2.0
 **Last Updated:** 2026-04-06
