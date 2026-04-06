@@ -163,6 +163,14 @@ if select.select([sys.stdin], [], [], 0)[0]:
 
 ## 📊 Performance Analysis
 
+### v3.0.0 Results (40 MHz SPI)
+
+| Metric | v2.1.1 | v3.0.0 | Improvement |
+|--------|--------|--------|-------------|
+| FPS | 10-15 | 25-32 | **2-3×** |
+| SPI Speed | 8 MHz | 40 MHz | 5× |
+| Resize | PIL BILINEAR | cv2 INTER_LINEAR | 3-4× |
+
 ### Frame Processing Times (on RPi 3B)
 
 | Operation | Time (ms) | Percentage |

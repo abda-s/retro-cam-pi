@@ -13,7 +13,7 @@ Display live camera feed on a 128x160 TFT LCD screen with instant image capture 
 - **Separate Capture Queues**: Independent queues for saving (320x240) and display processing
 - **Color Correction**: BRG to RGB conversion for correct colors
 - **Display Rotation**: 180° rotation option for proper orientation
-- **FPS Optimized (v2.1.1)**: BILINEAR resize, 5ms queue timeout, no signal handling
+- **FPS Optimized (v3.0.0)**: 40 MHz SPI, cv2 resize, ~30 FPS!
 
 ## 📋 Requirements
 
@@ -78,8 +78,7 @@ python3 camera_tft_optimized.py
 - Worker maintains latest frame in display queue
 - Main process can fall back to latest frame if needed
 
-**Status:** 🔄 Partially Addressed in v2.1.0 (queues now more reliable)
-**Documentation:** See `docs/SHARED_MEMORY_BUFFER.md` for technical details
+**Status:** ✅ Fixed in v3.0.0 (multiple fallbacks implemented)
 
 ## 🔍 Debugging Assistance
 
@@ -137,8 +136,8 @@ pkill -9 -f "camera_tft_optimized"
 | Version | FPS | Cores | Memory | Features |
 |---------|-----|--------|---------|-----------|
 | Standard | 8-10 | 1 (25%) | 6MB | Basic capture |
-| Optimized v2.0.x | 10-12 | 3-4 (75%) | 12MB | Multi-core, separate queues |
-| Optimized v2.1.x | 10-15 | 3-4 (75%) | 12MB | FPS-optimized, BILINEAR, no signal handling |
+| Optimized v2.1.x | 10-15 | 3-4 (75%) | 12MB | Multi-core, BILINEAR |
+| **v3.0.0** | **25-32** | **3-4 (75%)** | **12MB** | **40 MHz SPI, cv2 resize** |
 
 ## 🔧 Hardware Setup
 
@@ -272,5 +271,5 @@ For detailed technical information, see:
 
 ---
 
-**Version:** 2.1.1
+**Version:** 3.0.0
 **Last Updated:** 2026-04-06
