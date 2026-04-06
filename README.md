@@ -154,6 +154,13 @@ Edit `config/display_config.py` to customize:
 ## 🔍 Troubleshooting
 
 ### Application won't exit with Ctrl+C
+- **FIXED in v2.0.2**: Proper KeyboardInterrupt handling added
+- Workers now check for shutdown frequently
+- All blocking operations wrapped in try/except
+- Should show: "KeyboardInterrupt - Shutting down gracefully"
+- Clean shutdown within 3-5 seconds
+
+### No display output
 - Check if any processes are hung: `ps aux | grep camera_tft`
 - Kill manually if needed: `killall python3` (last resort)
 - Ensure all workers check shutdown_requested flag
