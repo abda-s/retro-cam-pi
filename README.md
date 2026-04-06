@@ -46,16 +46,9 @@ sudo ./setup.sh
 
 ### 3. Run the Application
 
-**Standard Version (Single-Threaded):**
 ```bash
 cd ~/rpi-tft-camera/src
-python3 camera_tft_display.py
-```
-
-**Optimized Version (Multi-Core):**
-```bash
-cd ~/rpi-tft-camera/src
-python3 camera_tft_optimized.py
+python3 main.py
 ```
 
 ## 🔧 Known Issues and Planned Fixes
@@ -177,9 +170,8 @@ rpi-tft-camera/
 ├── setup.sh                       # Main installation script
 ├── .gitignore                     # Git ignore patterns
 ├── src/
-│   ├── camera_tft_display.py       # Main application
-│   ├── requirements.txt            # Python dependencies
-│   └── install_dependencies.sh    # Dependency installer
+│   ├── main.py                    # Main application (v3.0.0 - 30 FPS)
+│   └── requirements.txt           # Python dependencies
 ├── config/
 │   └── display_config.py          # Configuration parameters
 └── docs/
@@ -204,11 +196,6 @@ Edit `config/display_config.py` to customize:
 - Or manually: `killall python3`
 
 ### No display output
-- Check if any processes are hung: `ps aux | grep camera_tft`
-- Kill manually if needed: `killall python3` (last resort)
-- Ensure all workers check running_flag
-
-### No display output
 - Check wiring connections
 - Verify SPI is enabled: `ls /dev/spi*`
 - Check permissions: `groups cam` (should include spi, gpio)
@@ -226,20 +213,18 @@ Edit `config/display_config.py` to customize:
 
 ### High memory usage
 - Check queue sizes: Monitor "Queue Sizes" output
-- Reduce queue maxsize in script (currently 2 per queue)
-- Restart application periodically if needed
 
 For more detailed troubleshooting, see `docs/TROUBLESHOOTING.md`.
 
 ## 📊 Performance
 
-Typical performance on Raspberry Pi 3 Model B:
+v3.0.0 on Raspberry Pi 3 Model B:
 
 | Setting | Resolution | FPS | Quality | Notes |
 |---------|-------------|------|---------|--------|
-| Default | 320x240 → 128x160 | 8-12 | Good | Balanced |
-| High | 640x480 → 128x160 | 5-8 | Better | Slower |
-| Low | 160x120 → 128x160 | 10-15 | Lower | Faster |
+| Default | 320x240 → 160x128 | **25-32** | Good | **30 FPS!** |
+| High | 640x480 → 160x128 | 15-20 | Better | Slower |
+| Low | 160x120 → 160x128 | 30-35 | Lower | Faster |
 
 ## 🤝 Contributing
 
