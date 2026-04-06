@@ -39,7 +39,14 @@ class CameraDisplay:
 
         # Configuration
         self.capture_resolution = (320, 240)
-        self.display_rotation = 1
+        
+        # Display rotation options:
+        # 0 = 0° (portrait: 128x160)
+        # 1 = 90° (landscape: 160x128)
+        # 2 = 180° (portrait upside down: 128x160)
+        # 3 = 270° (landscape upside down: 160x128)
+        self.display_rotation = 0  # Try 0, 1, 2, or 3 to find correct orientation
+        
         self.save_directory = Path.home() / "Pictures" / "captures"
         self.save_directory.mkdir(parents=True, exist_ok=True)
 
@@ -147,6 +154,11 @@ class CameraDisplay:
                 # Capture and display frame
                 try:
                     frame = self.camera.capture_array("main")
+                    
+                    # Fix color issue: swap R and B channels (BRG -> RGB)
+                    # OV5647 camera uses SGBRG10 pattern, need to swap channels
+                    frame = frame[:, :, [2, 1, 0]]  # Swap R and B channels
+                    
                     frame_image = Image.fromarray(frame)
 
                     # Resize to display resolution (stretch)
