@@ -1,0 +1,15 @@
+# Python dependencies for RPi TFT Camera Display
+# Install with: pip3 install -r requirements.txt
+
+# Core libraries (install via apt)
+python3-picamera2>=0.3.34
+python3-luma.lcd>=2.10.0
+python3-luma.core>=2.4.2
+python3-spidev>=3.6
+python3-rpi.gpio
+python3-pil>=11.0.0
+
+# Additional dependencies (usually installed with picamera2)
+python3-numpy>=1.26.0
+python3-av>=12.0.0
+python3-libcamera>=0.0.0
