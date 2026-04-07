@@ -19,6 +19,10 @@ python3 main.py
 ## Controls
 - `v` + Enter: Start/stop video+audio recording
 - `t` + Enter: Capture image
+- `m` + Enter: Toggle Live View / View Saved Footage mode
+- `n` + Enter: Next file (in View Mode)
+- `p` + Enter: Previous file (in View Mode)
+- `d` + Enter: Delete current file (in View Mode)
 - Ctrl+Z: Stop app
 
 ## Output

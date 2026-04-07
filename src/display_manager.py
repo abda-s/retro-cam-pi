@@ -210,3 +210,97 @@ class DisplayManager:
             GPIO.cleanup()
         except Exception:
             pass
+
+    def draw_browser_overlay(
+        self,
+        image: Image.Image,
+        filename: str,
+        index: int,
+        total: int,
+        file_type: str = "image",
+    ) -> Image.Image:
+        """Draw browser UI overlay on image.
+
+        Args:
+            image: Base image to draw overlay on
+            filename: Filename to display
+            index: Current file index (1-based)
+            total: Total number of files
+            file_type: Type of file ('image' or 'video')
+
+        Returns:
+            Composite image with overlay
+        """
+        from PIL import ImageDraw, ImageFont
+
+        if self._display is None:
+            return image
+
+        try:
+            overlay = Image.new('RGBA', image.size, (0, 0, 0, 150))
+            draw = ImageDraw.Draw(overlay)
+
+            # File index badge (top right)
+            index_text = f"{index}/{total}"
+            index_bbox = draw.textbbox((0, 0), index_text)
+            index_width = index_bbox[2] - index_bbox[0]
+            draw.text((image.width - index_width - 5, 3), index_text, fill=(255, 255, 255, 255))
+
+            # Filename (bottom, truncate if too long)
+            max_filename_width = image.width - 10
+            truncated_filename = filename
+            filename_bbox = draw.textbbox((0, 0), truncated_filename)
+            filename_width = filename_bbox[2] - filename_bbox[0]
+
+            while filename_width > max_filename_width and len(truncated_filename) > 4:
+                truncated_filename = truncated_filename[:-4] + "..."
+                filename_bbox = draw.textbbox((0, 0), truncated_filename)
+                filename_width = filename_bbox[2] - filename_bbox[0]
+
+            draw.text((5, image.height - 35), truncated_filename, fill=(255, 255, 255, 255))
+
+            # File type indicator
+            type_color = (0, 200, 255, 255) if file_type == "video" else (0, 255, 150, 255)
+            draw.text((5, image.height - 20), f"[{file_type.upper()}]", fill=type_color)
+
+            # Navigation hints (very bottom) - fixed positioning to avoid clipping
+            draw.text((5, image.height - 12), "n/p:nav m:mode", fill=(180, 180, 180, 200))
+
+            # Composite overlay onto original image
+            return Image.alpha_composite(image.convert('RGBA'), overlay).convert('RGB')
+
+        except Exception as e:
+            print(f"Browser overlay error: {e}")
+            return image
+
+    def draw_no_files_message(self, width: int, height: int) -> Image.Image:
+        """Draw 'no files found' message.
+
+        Args:
+            width: Image width
+            height: Image height
+
+        Returns:
+            PIL Image with message
+        """
+        from PIL import ImageDraw, ImageFont
+
+        image = Image.new('RGB', (width, height), (0, 0, 0))
+        draw = ImageDraw.Draw(image)
+
+        messages = [
+            "No Files Found",
+            "Press 'm' for Live View"
+        ]
+
+        y_offset = height // 2 - 20
+        for msg in messages:
+            bbox = draw.textbbox((0, 0), msg)
+            msg_width = bbox[2] - bbox[0]
+            x = (width - msg_width) // 2
+            draw.text((x, y_offset), msg, fill=(255, 255, 255))
+            y_offset += 20
+
+        draw.text((5, height - 5), "m:live", fill=(180, 180, 180))
+
+        return image

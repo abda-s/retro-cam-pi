@@ -136,7 +136,7 @@ The application is organized into 10 independent modules:
 |--------|--------|---------|---------------------|
 | `main.py` | 325 | Application orchestration | `CameraTFTApp`, `main()` |
 | `camera_worker.py` | 367 | Picamera2 capture, recording | `capture_worker()`, `AudioRecorder` |
-| `process_worker.py` | 46 | Frame resizing | `process_worker()` |
+| `process_worker.py` | 46 | Frame passthrough | `process_worker()` |
 | `display_manager.py` | 177 | TFT display management | `DisplayManager` class |
 | `capture_manager.py` | 87 | Image save, feedback | `CaptureManager` class |
 | `video_recorder.py` | 29 | Legacy video recorder | `VideoRecorder` class |
@@ -179,7 +179,7 @@ if key == 't':
 #### Processing Efficiency
 - **Minimize conversions**: Keep data in numpy/PIL format as long as possible
 - **Low capture resolution**: 320x240 reduces processing time
-- **Efficient resize**: LANCZOS provides good quality with acceptable speed
+- **Lores optimization**: 128×160 lores stream matches display exactly (no resize needed)
 - **Direct display**: No intermediate rendering steps
 
 #### SPI Communication
@@ -410,5 +410,5 @@ Change `FILE_FORMAT` in config:
 
 ---
 
-**Version:** 4.2.2
+**Version:** 4.2.3
 **Last Updated:** 2026-04-07

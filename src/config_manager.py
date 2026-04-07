@@ -45,6 +45,10 @@ class Config:
         self.audio_enabled: bool = True
         self.audio_sync: float = -0.3  # Audio sync offset in seconds
 
+        # Media browser settings
+        self.browser_font_size: int = 10
+        self.show_file_index: bool = True
+
         # Ensure save directory exists
         self.save_directory.mkdir(parents=True, exist_ok=True)
 

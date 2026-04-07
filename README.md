@@ -17,7 +17,8 @@ Display live camera feed on a 128x160 TFT LCD screen with instant image capture 
 - **FPS Optimized (v4.2.0+)**: 40 MHz SPI, matched aspect ratio, ~35 FPS!
 - **Video Recording**: Press 'v' to record video (H264, non-blocking with CircularOutput2)
 - **Dual Stream**: Main stream (640x480) for video, Lores stream (128x160) for display
-- **Modular Architecture**: Clean separation of concerns with 8 modules
+- **View Saved Footage**: Press 'm' to browse and view saved images and videos (v4.2.2+)
+- **Modular Architecture**: Clean separation of concerns with 10 modules
 
 ## 📋 Requirements
 
@@ -112,6 +113,10 @@ pkill -9 -f "camera_tft_optimized"
 ### Controls
 - **'t' key**: Capture current frame and save as PNG (320x240 full resolution)
 - **'v' key**: Start/stop video recording (640x480 with audio)
+- **'m' key**: Toggle between Live View and View Saved Footage mode
+- **'n' key** (in View Mode): Navigate to next file
+- **'p' key** (in View Mode): Navigate to previous file
+- **'d' key** (in View Mode): Delete current file
 - **Ctrl+Z**: Stop application
 
 ### What Happens When You Press 't' (Optimized Version)
@@ -131,6 +136,29 @@ pkill -9 -f "camera_tft_optimized"
    - "Video Saved!" message appears on screen
    - Video file finalizes
 
+### What Happens When You Press 'm'
+
+1. **Enter View Mode**:
+    - Live camera feed pauses
+    - Application scans `~/Pictures/captures/` for images and videos
+    - Files are displayed sorted by newest first
+    - Image/video shown full-screen (stretched to fit 128x160)
+    - Filename and file index shown (e.g., "3/10")
+    - File type indicator ([IMAGE] or [VIDEO])
+    - Navigation hints displayed at bottom
+    - Persistent thumbnail cache is loaded from `.thumbnails/` directory
+
+2. **Navigate in View Mode**:
+    - Press 'n' to view next file
+    - Press 'p' to view previous file
+    - For videos: displays first frame full-screen
+    - Press 'd' to delete current file (shows "Deleted!" feedback)
+    - Cannot delete the last remaining file
+
+3. **Return to Live Mode**:
+    - Press 'm' again to return to live camera feed
+    - Camera feed resumes immediately
+
 ### File Storage
 
 - **Location**: `~/Pictures/captures/`
@@ -149,17 +177,23 @@ pkill -9 -f "camera_tft_optimized"
 | **v4.1.0** | **25-32** | **3-4 (75%)** | **12MB** | **Video recording (initial)** |
 | **v4.2.0** | **25-32** | **3-4 (75%)** | **12MB** | **Dual stream, CircularOutput2** |
 | **v4.2.2** | **30-35** | **3-4 (75%)** | **12MB** | **Optimized lores (128x160), Frame buffering** |
+| **v4.2.3** | **30-35** | **3-4 (75%)** | **12MB** | **View saved footage mode** |
+| **v4.2.4** | **30-35** | **3-4 (75%)** | **12MB** | **Full-screen images, fixed video thumbnails, fixed UI** |
+| **v4.2.5** | **30-35** | **3-4 (75%)** | **12MB** | **Added .mp4 support, debug logging, video placeholder** |
+| **v4.2.6** | **30-35** | **3-4 (75%)** | **12MB** | **Smart cache validation, automatic black bar fix** |
+| **v4.2.7** | **30-35** | **3-4 (75%)** | **12MB** | **Delete files in view mode, persistent cache, cleaner logs** |
 
 ## 🏗️ Architecture (v4.2.2)
 
-The application is split into 10 independent modules for maintainability:
+The application is split into 11 independent modules for maintainability:
 
 | Module | Responsibility | Public API |
 |--------|----------------|------------|
 | `camera_worker.py` | Picamera2 capture, BGR→RGB swap | `capture_worker(...)` |
-| `process_worker.py` | cv2.resize for display | `process_worker(...)` |
+| `process_worker.py` | Frame passthrough for display | `process_worker(...)` |
 | `display_manager.py` | ST7735 init, display, cleanup, frame buffering | `DisplayManager` class |
 | `capture_manager.py` | Image save, feedback overlay | `CaptureManager` class |
+| `media_browser.py` | Browse saved images and videos | `MediaBrowser` class |
 | `video_recorder.py` | Video recording with audio | `VideoRecorder` class |
 | `config_manager.py` | Config loading, env override | `Config` class |
 | `shared.py` | Queue sizes, SPI speeds, defaults | Constants |
@@ -171,7 +205,7 @@ The application is split into 10 independent modules for maintainability:
 
 ```
 Core 1: capture_worker  — picamera2 RGB888, BGR→RGB swap → queues
-Core 2: process_worker  — cv2.resize (INTER_LINEAR) → display_queue  
+Core 2: process_worker  — frame passthrough (no resize needed) → display_queue
 Core 3+: main loop      — PIL convert + luma display @ 40 MHz
        + video_recorder — FfmpegOutput with ALSA audio input
 ```
@@ -270,6 +304,16 @@ Legacy `config/display_config.py` is kept for reference but not used by v4.0.0.
 ### High memory usage
 - Check queue sizes: Monitor "Queue Sizes" output
 
+### View mode not showing videos
+- **Check file format**: Ensure videos are `.mp4` or `.mkv` format (now supported in v4.2.5)
+- **Check debug output**: Terminal will show `[MediaBrowser]` messages when entering view mode
+- **Verify ffmpeg installed**: `ffmpeg -version` - required for video thumbnails
+- **Check file location**: Videos must be in `~/Pictures/captures/` directory
+
+### Black bars on display
+- **Debug output**: Terminal shows `[MediaBrowser] Resized to: (128, 160)` - confirms full-screen
+- **Clear cache**: Restart app to rebuild thumbnail cache if issue persists
+
 For more detailed troubleshooting, see `docs/TROUBLESHOOTING.md`.
 
 ## 📊 Performance
@@ -312,5 +356,53 @@ For detailed technical information, see:
 
 ---
 
-**Version:** 4.2.2
+**Version:** 4.2.7
 **Last Updated:** 2026-04-07
+
+## 🎉 New in v4.2.7
+
+### View Mode Delete Functionality
+- **Delete files**: Press 'd' to delete current file while in View Mode
+- **Safety**: Cannot delete the last remaining file
+- **Auto-cleanup**: Removes both source file and thumbnail cache
+- **Feedback**: Shows "Deleted!" message on display
+- **Auto-advance**: Automatically moves to next file after delete
+
+### View Mode Logging Improvements
+- **Reduced log spam**: Removed per-frame cache logs (was 30-35 logs/sec)
+- **Cleaner terminal**: Now shows only meaningful diagnostic information
+- **Better focus**: Can easily see camera, recording, and video processing logs
+- **Smart logging**: Kept useful logs (validation, processing, errors) while removing spam
+
+## 🎉 New in v4.2.6
+
+### View Saved Footage Mode Improvements
+- **Smart cache validation**: Auto-detects and fixes mismatched thumbnail sizes
+- **Automatic black bar fix**: Rebuilds invalid thumbnails at correct size (128x160)
+- **Selective cache rebuild**: Only rebuilds thumbnails that don't match display size
+- **Detailed validation logging**: Shows which thumbnails are valid or invalid
+
+## 🎉 New in v4.2.5
+
+### View Saved Footage Mode Improvements
+- **Added .mp4 support**: Videos in .mp4 format now supported (not just .mkv)
+- **Debug logging**: Extensive [MediaBrowser] output for troubleshooting
+- **Video placeholder**: Falls back to "VIDEO" placeholder if thumbnail extraction fails
+
+## 🎉 New in v4.2.4
+
+### View Saved Footage Mode Improvements
+- **Full-screen images**: Images and videos now fill entire 128x160 display
+- **Fixed video thumbnails**: Video thumbnails now display correctly
+- **Fixed navigation hints**: Navigation text now visible at bottom of screen
+- Images stretched to fit display (full-screen coverage)
+
+## 🎉 New in v4.2.3
+
+### View Saved Footage Mode
+- Press **'m'** to toggle between Live View and View Mode
+- Browse saved images and videos directly on TFT display
+- Navigate with **'n'** (next) and **'p'** (previous)
+- Videos display first frame as thumbnail
+- Files sorted newest first
+- Shows file index, filename, and type on display
