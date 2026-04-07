@@ -113,9 +113,11 @@ class CameraTFTApp:
                 self._running_flag,
                 self._video_flag,
                 self._image_capture_flag,
-                self._config.video_resolution,  # main stream for video
-                self._config.capture_resolution,  # lores for display
+                self._config.video_resolution,
+                self._config.capture_resolution,
                 self._config.save_directory,
+                self._config.audio_enabled,
+                self._config.audio_device,
             )
         )
         self._capture_process.start()
