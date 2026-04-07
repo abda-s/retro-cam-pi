@@ -1,5 +1,50 @@
 # Documentation Update Summary
 
+## v4.2.2 - Input Manager & Logging Modules
+
+Added independent modules for input detection and logging to improve code modularity and maintainability.
+
+## What Changed
+
+### New Modules (v4.2.1 → v4.2.2)
+| Module | Purpose | Features |
+|--------|---------|----------|
+| `input_manager.py` | Non-blocking key detection | `check_for_input()`, `wait_for_key()`, `poll_for_key()` |
+| `logger.py` | Centralized logging | DEBUG/INFO/WARNING/ERROR levels, file & console output |
+
+### Technical Implementation
+1. **InputManager class** - Wraps `select.select()` for stdin polling
+2. **Logger class** - Standard Python logging with custom formatters
+3. **Module-level imports** - `get_logger(__name__)` for clean logging
+4. **Print replacement** - All `print()` statements replaced with logger calls
+5. **File logging** - Logs written to `~/.cache/opencode/rpi-tft-camera/app.log`
+
+### Key Files Added
+- `src/input_manager.py` - New module (79 lines)
+- `src/logger.py` - New module (84 lines)
+
+### Key Files Modified
+- `src/main.py` - Added InputManager and Logger imports
+- `src/main.py` - Replaced all `print()` with `_logger.debug/info/error/warning`
+- `src/camera_worker.py` - Replaced `print()` with `_logger.debug/info`
+
+## Implementation Status
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Input Manager | ✅ Done | Non-blocking key detection |
+| Logger Module | ✅ Done | Centralized logging with levels |
+| Print Replacement | ✅ Done | All print statements replaced |
+| File Logging | ✅ Done | Logs written to cache directory |
+| Console Logging | ✅ Done | Colored output by level |
+
+## Known Notes
+
+- Logger supports both file and console output simultaneously
+- File path: `~/.cache/opencode/rpi-tft-camera/app.log`
+- Console format: `HH:MM:SS | DEBUG-8s | name | msg`
+- File format: `YYYY-MM-DD HH:MM:SS | DEBUG-8s | name | msg`
+
 ## v4.2.1 - Display Optimization & Tearing Fix
 
 Documentation updated to reflect display optimizations and frame buffering improvements.
@@ -97,4 +142,4 @@ All documentation updated to reflect audio recording feature with USB microphone
 ---
 
 **Last Updated:** 2026-04-07
-**Version:** 4.2.1
+**Version:** 4.2.2

@@ -152,7 +152,7 @@ pkill -9 -f "camera_tft_optimized"
 
 ## 🏗️ Architecture (v4.2.2)
 
-The application is split into 8 independent modules for maintainability:
+The application is split into 10 independent modules for maintainability:
 
 | Module | Responsibility | Public API |
 |--------|----------------|------------|
@@ -163,6 +163,8 @@ The application is split into 8 independent modules for maintainability:
 | `video_recorder.py` | Video recording with audio | `VideoRecorder` class |
 | `config_manager.py` | Config loading, env override | `Config` class |
 | `shared.py` | Queue sizes, SPI speeds, defaults | Constants |
+| `input_manager.py` | Non-blocking key detection | `InputManager` class |
+| `logger.py` | Centralized logging with file & console output | `get_logger()` |
 | `main.py` | Orchestration only | `main()` |
 
 ### Process Architecture
@@ -310,5 +312,5 @@ For detailed technical information, see:
 
 ---
 
-**Version:** 4.2.1
+**Version:** 4.2.2
 **Last Updated:** 2026-04-07

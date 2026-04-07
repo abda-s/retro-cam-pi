@@ -128,20 +128,46 @@ frame_image = frame_image.resize(
 device.display(frame_image)
 ```
 
-### Key Detection Strategy
+### Module Architecture (v4.2.2)
+
+The application is organized into 10 independent modules:
+
+| Module | Lines | Purpose | Key Classes/Functions |
+|--------|--------|---------|---------------------|
+| `main.py` | 325 | Application orchestration | `CameraTFTApp`, `main()` |
+| `camera_worker.py` | 367 | Picamera2 capture, recording | `capture_worker()`, `AudioRecorder` |
+| `process_worker.py` | 46 | Frame resizing | `process_worker()` |
+| `display_manager.py` | 177 | TFT display management | `DisplayManager` class |
+| `capture_manager.py` | 87 | Image save, feedback | `CaptureManager` class |
+| `video_recorder.py` | 29 | Legacy video recorder | `VideoRecorder` class |
+| `config_manager.py` | 88 | Configuration management | `Config` class |
+| `input_manager.py` | 79 | Non-blocking key detection | `InputManager` class |
+| `logger.py` | 84 | Centralized logging | `Logger` class, `get_logger()` |
+| `shared.py` | 19 | Constants and defaults | N/A |
+
+**Modularity Benefits:**
+- **Separation of concerns** - Each module has a single responsibility
+- **Independent testing** - Modules can be tested in isolation
+- **Easy maintenance** - Changes localized to specific modules
+- **Reusability** - Modules can be used in other projects
+
+### Key Detection Strategy (v4.2.2+)
 
 ```python
-if select.select([sys.stdin], [], [], 0)[0]:
-    key = sys.stdin.read(1)
-    if key.lower() == 't':
-        # Capture image
+# Using InputManager for clean API
+input_manager = InputManager()
+key = input_manager.check_for_input()  # Non-blocking
+
+if key == 't':
+    # Capture image
 ```
 
 **Advantages:**
 - Non-blocking (doesn't pause video feed)
-- No external dependencies required
+- Clean API with dedicated class
 - Works in terminal environment
 - Fast response time (<1ms)
+- Multiple detection methods available (`check_for_input`, `wait_for_key`, `poll_for_key`)
 
 ### Performance Optimization
 
@@ -162,6 +188,16 @@ if select.select([sys.stdin], [], [], 0)[0]:
 - **4-wire SPI**: Standard mode for ST7735R display
 
 ## 📊 Performance Analysis
+
+### v4.2.2 Results (Input Manager & Logging)
+
+| Metric | v4.2.1 | v4.2.2 | Improvement |
+|--------|---------|---------|-------------|
+| FPS | 30-35 | 30-35 | No change |
+| Modules | 8 | 10 | 2 new modules (input, logger) |
+| Code Modularity | Good | Better | Improved separation of concerns |
+| Logging | print() | Professional | Standard logging with levels |
+| Input Detection | Inline | Dedicated | Independent InputManager class |
 
 ### v4.2.1 Results (Frame Buffering + Optimized Lores)
 
@@ -374,5 +410,5 @@ Change `FILE_FORMAT` in config:
 
 ---
 
-**Version:** 4.2.1
+**Version:** 4.2.2
 **Last Updated:** 2026-04-07
