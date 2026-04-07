@@ -114,14 +114,14 @@ class CameraTFTApp:
                 self._video_flag,
                 self._image_capture_flag,
                 self._config.video_resolution,
-                self._config.capture_resolution,
+                self._config.lores_resolution,
                 self._config.save_directory,
                 self._config.audio_enabled,
                 self._config.audio_device,
             )
         )
         self._capture_process.start()
-        print(f"✓ Capture worker (Core 1) — video={self._config.video_resolution}, display={self._config.capture_resolution}")
+        print(f"✓ Capture worker (Core 1) — video={self._config.video_resolution}, lores={self._config.lores_resolution}")
 
         # Process worker for display resize
         display_size = self._display_manager.size
@@ -285,11 +285,15 @@ class CameraTFTApp:
                     fps = 1.0 / avg_time if avg_time > 0 else 0
                     
                     status = f"FPS: {fps:.1f} | Captures: {self._capture_count.value}"
+                    skipped = self._display_manager.skipped_frames
+                    if skipped > 0:
+                        status += f" | Skipped: {skipped}"
                     if self._is_recording:
                         rec_duration = int(time.time() - self._recording_start_time)
                         status += f" | REC: {rec_duration}s"
                     
                     print(status)
+                    self._display_manager.reset_skipped_frames()
                     self._last_fps_print = now
 
         except Exception as e:

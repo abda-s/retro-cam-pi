@@ -22,8 +22,8 @@ class Config:
         self.spi_speed_hz: int = 40_000_000
 
         # Camera settings
-        self.capture_resolution: Tuple[int, int] = (320, 240)
-        self.capture_format: str = "RGB888"
+        self.capture_resolution: Tuple[int, int] = (640, 480)  # main stream for photo/video
+        self.lores_resolution: Tuple[int, int] = (128, 160)   # lores stream for display (matches display)
 
         # Queue settings
         self.queue_maxsize: int = 2

@@ -145,7 +145,7 @@ class CameraWorker:
     def __init__(
         self,
         capture_resolution: Tuple[int, int] = (640, 480),
-        lores_resolution: Tuple[int, int] = (320, 240),
+        lores_resolution: Tuple[int, int] = (128, 160),
         save_directory: Path = None,
         audio_enabled: bool = True,
         audio_device: str = "hw:2,0",

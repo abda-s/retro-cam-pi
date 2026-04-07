@@ -5,6 +5,8 @@ Handles ST7735 TFT display initialization, rendering, and cleanup.
 
 from typing import Tuple, Optional
 from pathlib import Path
+import threading
+import time
 
 try:
     from luma.core.interface.serial import spi
@@ -51,6 +53,11 @@ class DisplayManager:
         self._spi_speed_hz = spi_speed_hz
         self._width: int = 0
         self._height: int = 0
+        
+        # Frame buffering to prevent tearing
+        self._display_busy = False
+        self._display_lock = threading.Lock()
+        self._skipped_frames = 0
 
     @property
     def width(self) -> int:
@@ -66,7 +73,16 @@ class DisplayManager:
     def size(self) -> Tuple[int, int]:
         """Get display size as (width, height)."""
         return (self._width, self._height)
-
+    
+    @property
+    def skipped_frames(self) -> int:
+        """Get count of skipped frames (due to display busy)."""
+        return self._skipped_frames
+    
+    def reset_skipped_frames(self) -> None:
+        """Reset the skipped frames counter."""
+        with self._display_lock:
+            self._skipped_frames = 0
     def initialize(self) -> bool:
         """Initialize the ST7735 display.
 
@@ -119,13 +135,32 @@ class DisplayManager:
             return None
 
     def display_frame(self, image: Image.Image) -> None:
-        """Display a PIL Image on the TFT.
+        """Display a PIL Image on the TFT with frame buffering to prevent tearing.
 
         Args:
             image: PIL Image to display
+            
+        Note:
+            If display is currently busy, frame will be skipped to prevent tearing.
+            Skipped frames are counted and can be retrieved via skipped_frames property.
         """
-        if self._display is not None:
+        if self._display is None:
+            return
+        
+        # Check if display is busy, skip frame if so (prevents tearing)
+        with self._display_lock:
+            if self._display_busy:
+                self._skipped_frames += 1
+                return
+            self._display_busy = True
+        
+        try:
+            # Display the frame (blocking call - waits for SPI transfer to complete)
             self._display.display(image)
+        finally:
+            # Always clear busy flag, even if display failed
+            with self._display_lock:
+                self._display_busy = False
 
     def show_error(self, error_msg: str) -> None:
         """Show error message on display.

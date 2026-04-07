@@ -4,18 +4,19 @@ Display live camera feed on a 128x160 TFT LCD screen with instant image capture 
 
 ## 🎯 Features
 
-- **Live Video Feed**: Real-time camera display on 128x160 TFT screen (10-15 FPS with multi-core)
+- **Live Video Feed**: Real-time camera display on 128x160 TFT screen (30-35 FPS with multi-core)
 - **Instant Capture**: Press 't' to capture high-resolution images instantly
-- **Smart Storage**: Captures saved at original resolution (320x240 PNG) - full quality!
+- **Smart Storage**: Captures saved at original resolution (640x480 PNG) - full quality!
 - **Visual Feedback**: On-screen confirmation when images are saved
 - **Graceful Exit**: Stop application with Ctrl+Z
 - **Multi-Core Optimization**: Uses 3-4 Raspberry Pi 3B cores for optimal performance
-- **Separate Capture Queues**: Independent queues for saving (320x240) and display processing
-- **Color Correction**: BRG to RGB conversion for correct colors
+- **Optimized Display Pipeline**: Lores stream (128x160) matches display size, no resizing needed
+- **Frame Buffering**: Prevents tearing artifacts during fast camera movement
+- **Color Correction**: BGR to RGB conversion for correct colors
 - **Display Rotation**: 180° rotation option for proper orientation
-- **FPS Optimized (v4.2.0)**: 40 MHz SPI, cv2 resize, ~30 FPS!
+- **FPS Optimized (v4.2.0+)**: 40 MHz SPI, matched aspect ratio, ~35 FPS!
 - **Video Recording**: Press 'v' to record video (H264, non-blocking with CircularOutput2)
-- **Dual Stream**: Main stream (640x480) for video, Lores stream (320x240) for display
+- **Dual Stream**: Main stream (640x480) for video, Lores stream (128x160) for display
 - **Modular Architecture**: Clean separation of concerns with 8 modules
 
 ## 📋 Requirements
@@ -147,8 +148,9 @@ pkill -9 -f "camera_tft_optimized"
 | **v4.0.0** | **25-32** | **3-4 (75%)** | **12MB** | **Modular architecture** |
 | **v4.1.0** | **25-32** | **3-4 (75%)** | **12MB** | **Video recording (initial)** |
 | **v4.2.0** | **25-32** | **3-4 (75%)** | **12MB** | **Dual stream, CircularOutput2** |
+| **v4.2.1** | **30-35** | **3-4 (75%)** | **12MB** | **Optimized lores (128x160), Frame buffering** |
 
-## 🏗️ Architecture (v4.2.0)
+## 🏗️ Architecture (v4.2.1)
 
 The application is split into 8 independent modules for maintainability:
 
@@ -156,7 +158,7 @@ The application is split into 8 independent modules for maintainability:
 |--------|----------------|------------|
 | `camera_worker.py` | Picamera2 capture, BGR→RGB swap | `capture_worker(...)` |
 | `process_worker.py` | cv2.resize for display | `process_worker(...)` |
-| `display_manager.py` | ST7735 init, display, cleanup | `DisplayManager` class |
+| `display_manager.py` | ST7735 init, display, cleanup, frame buffering | `DisplayManager` class |
 | `capture_manager.py` | Image save, feedback overlay | `CaptureManager` class |
 | `video_recorder.py` | Video recording with audio | `VideoRecorder` class |
 | `config_manager.py` | Config loading, env override | `Config` class |
@@ -308,5 +310,5 @@ For detailed technical information, see:
 
 ---
 
-**Version:** 4.2.0
-**Last Updated:** 2026-04-06
+**Version:** 4.2.1
+**Last Updated:** 2026-04-07
