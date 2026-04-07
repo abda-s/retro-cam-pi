@@ -148,9 +148,9 @@ pkill -9 -f "camera_tft_optimized"
 | **v4.0.0** | **25-32** | **3-4 (75%)** | **12MB** | **Modular architecture** |
 | **v4.1.0** | **25-32** | **3-4 (75%)** | **12MB** | **Video recording (initial)** |
 | **v4.2.0** | **25-32** | **3-4 (75%)** | **12MB** | **Dual stream, CircularOutput2** |
-| **v4.2.1** | **30-35** | **3-4 (75%)** | **12MB** | **Optimized lores (128x160), Frame buffering** |
+| **v4.2.2** | **30-35** | **3-4 (75%)** | **12MB** | **Optimized lores (128x160), Frame buffering** |
 
-## 🏗️ Architecture (v4.2.1)
+## 🏗️ Architecture (v4.2.2)
 
 The application is split into 8 independent modules for maintainability:
 

@@ -20,6 +20,10 @@ except ImportError:
 
 import numpy as np
 
+# Logger
+from logger import get_logger
+_logger = get_logger(__name__)
+
 
 class AudioRecorder:
     """Background audio recorder using ALSA arecord."""
@@ -43,7 +47,7 @@ class AudioRecorder:
         ]
         
         self._process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"Audio recording started: {self._temp_file}")
+        _logger.debug(f"Audio recording started: {self._temp_file}")
         return True
     
     def stop(self) -> Optional[Path]:
@@ -57,7 +61,7 @@ class AudioRecorder:
             time.sleep(0.2)
         
         if self._temp_file and self._temp_file.exists():
-            print(f"Audio saved: {self._temp_file}")
+            _logger.debug(f"Audio saved: {self._temp_file}")
             return self._temp_file
         return None
     
@@ -68,7 +72,7 @@ class AudioRecorder:
         """Clean up temp audio file."""
         if self._temp_file and self._temp_file.exists():
             self._temp_file.unlink()
-            print(f"Audio temp file cleaned: {self._temp_file}")
+            _logger.debug(f"Audio temp file cleaned: {self._temp_file}")
 
 
 def ffmpeg_merge(video_path: Path, audio_path: Path, output_path: Path) -> None:
@@ -86,14 +90,14 @@ def ffmpeg_merge(video_path: Path, audio_path: Path, output_path: Path) -> None:
         
         for attempt in range(max_retries):
             if attempt > 0:
-                print(f"FFmpeg retry {attempt + 1}/{max_retries}...")
+                _logger.debug(f"FFmpeg retry {attempt + 1}/{max_retries}...")
                 time.sleep(retry_delay)
             
             if not audio_path.exists():
-                print(f"FFmpeg: audio file missing, waiting...")
+                _logger.debug(f"FFmpeg: audio file missing, waiting...")
                 time.sleep(1)
                 if not audio_path.exists():
-                    print(f"FFmpeg merge FAILED: audio file not found")
+                    _logger.debug(f"FFmpeg merge FAILED: audio file not found")
                     return
             
             cmd = [
@@ -113,7 +117,7 @@ def ffmpeg_merge(video_path: Path, audio_path: Path, output_path: Path) -> None:
             )
             
             if proc.returncode == 0:
-                print(f"FFmpeg merge complete: {output_path}")
+                _logger.debug(f"FFmpeg merge complete: {output_path}")
                 if audio_path.exists():
                     audio_path.unlink()
                 mp4_path = video_path.with_suffix('.mp4')
@@ -126,17 +130,17 @@ def ffmpeg_merge(video_path: Path, audio_path: Path, output_path: Path) -> None:
                 error_str = '; '.join(error_lines) if error_lines else error_msg[:150]
                 
                 if attempt < max_retries - 1:
-                    print(f"FFmpeg attempt {attempt + 1} failed: {error_str}")
+                    _logger.debug(f"FFmpeg attempt {attempt + 1} failed: {error_str}")
                     time.sleep(retry_delay)
                 else:
-                    print(f"FFmpeg merge FAILED: {error_str}")
+                    _logger.debug(f"FFmpeg merge FAILED: {error_str}")
         
         if audio_path.exists():
-            print(f"WAV file kept: {audio_path}")
+            _logger.debug(f"WAV file kept: {audio_path}")
     
     thread = threading.Thread(target=run_ffmpeg, daemon=True)
     thread.start()
-    print(f"FFmpeg merge started: {output_path}")
+    _logger.debug(f"FFmpeg merge started: {output_path}")
 
 
 class CameraWorker:
@@ -177,11 +181,11 @@ class CameraWorker:
             
             self._encoder = None
             
-            print(f"Camera started: main={self._capture_resolution}, lores={self._lores_resolution}")
+            _logger.debug(f"Camera started: main={self._capture_resolution}, lores={self._lores_resolution}")
             return True
             
         except Exception as e:
-            print(f"Camera start error: {e}")
+            _logger.debug(f"Camera start error: {e}")
             return False
     
     def start_recording(self, filename: Path) -> bool:
@@ -202,10 +206,10 @@ class CameraWorker:
             if self._audio_enabled:
                 self._audio_recorder.start(filename)
             
-            print(f"Recording started: {filename}")
+            _logger.debug(f"Recording started: {filename}")
             return True
         except Exception as e:
-            print(f"Start recording error: {e}")
+            _logger.debug(f"Start recording error: {e}")
             return False
     
     def stop_recording(self) -> Optional[Path]:
@@ -223,23 +227,23 @@ class CameraWorker:
                     audio_path = self._audio_recorder.stop()
                 
                 self._current_video_file = None
-                print(f"Recording stopped: {video_path}")
+                _logger.debug(f"Recording stopped: {video_path}")
                 
                 self._encoder = None
                 
-                print("Waiting for audio flush...")
+                _logger.debug("Waiting for audio flush...")
                 time.sleep(0.5)
                 
                 if audio_path and audio_path.exists() and video_path:
                     ffmpeg_merge(video_path, audio_path, video_path)
                 
-                print("Restarting camera after recording...")
+                _logger.debug("Restarting camera after recording...")
                 self._camera.stop()
                 self._camera.start()
-                print("Camera restarted - ready for next recording")
+                _logger.debug("Camera restarted - ready for next recording")
                 
             except Exception as e:
-                print(f"Stop recording error: {e}")
+                _logger.debug(f"Stop recording error: {e}")
                 self._is_recording = False
         
         thread = threading.Thread(target=stop_and_restart, daemon=True)
@@ -274,10 +278,10 @@ class CameraWorker:
             image = Image.fromarray(frame_rgb)
             image.save(filename)
             
-            print(f"Image saved: {filename}")
+            _logger.debug(f"Image saved: {filename}")
             return True
         except Exception as e:
-            print(f"Image capture error: {e}")
+            _logger.debug(f"Image capture error: {e}")
             return False
     
     def stop(self):
@@ -320,10 +324,10 @@ def capture_worker(
         )
         
         if not camera.start():
-            print("Failed to start camera")
+            _logger.debug("Failed to start camera")
             return
             
-        print(f"Capture worker started: video={capture_resolution}, display={lores_resolution}")
+        _logger.debug(f"Capture worker started: video={capture_resolution}, display={lores_resolution}")
         
         while running_flag.value:
             if video_recording_flag.value == 1:
@@ -341,7 +345,7 @@ def capture_worker(
                 filename = save_directory / f"capture_{timestamp}.png"
                 if camera.capture_and_save_main_frame(filename):
                     capture_count.value += 1
-                    print(f"✓ Saved: {filename}")
+                    _logger.debug(f"✓ Saved: {filename}")
                 image_capture_flag.value = 0
             
             frame = camera.capture_lores_frame()
@@ -358,10 +362,10 @@ def capture_worker(
             time.sleep(0.001)
             
         camera.stop()
-        print("Capture worker stopped")
+        _logger.debug("Capture worker stopped")
         
     except Exception as e:
-        print(f"Capture worker fatal error: {e}")
+        _logger.debug(f"Capture worker fatal error: {e}")
     finally:
         if camera:
             camera.stop()

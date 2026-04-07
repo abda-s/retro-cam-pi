@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 RPi TFT Camera Display - Modular Version
-Version: 4.2.0 - Dual encoder (H264 for video + lores for display)
+Version: 4.2.1 - Input manager and logging modules
 
 Uses Picamera2's dual encoder feature:
   - H264 encoder for video recording (proper timing)
@@ -9,7 +9,6 @@ Uses Picamera2's dual encoder feature:
 """
 
 import sys
-import select
 import time
 import os
 from datetime import datetime
@@ -36,6 +35,8 @@ from process_worker import process_worker
 from display_manager import DisplayManager
 from capture_manager import CaptureManager
 from config_manager import Config
+from input_manager import InputManager
+from logger import get_logger
 
 
 class CameraTFTApp:
@@ -44,6 +45,13 @@ class CameraTFTApp:
     def __init__(self, config: Config):
         self._config = config
         self._running = False
+        
+        # Logger
+        self._logger = get_logger(__name__)
+        self._logger.info("Initializing CameraTFTApp")
+        
+        # Input manager
+        self._input_manager = InputManager()
 
         # Display manager
         self._display_manager = DisplayManager(
@@ -102,7 +110,7 @@ class CameraTFTApp:
 
     def start_workers(self) -> None:
         """Start worker processes."""
-        print("\nStarting workers...")
+        self._logger.info("Starting workers...")
 
         # Capture worker with dual stream support
         self._capture_process = Process(
@@ -121,7 +129,7 @@ class CameraTFTApp:
             )
         )
         self._capture_process.start()
-        print(f"✓ Capture worker (Core 1) — video={self._config.video_resolution}, lores={self._config.lores_resolution}")
+        self._logger.info(f"Capture worker started: video={self._config.video_resolution}, lores={self._config.lores_resolution}")
 
         # Process worker for display resize
         display_size = self._display_manager.size
@@ -135,12 +143,12 @@ class CameraTFTApp:
             )
         )
         self._process_process.start()
-        print("✓ Process worker (Core 2) — cv2.resize INTER_LINEAR")
-        print("✓ Main display loop (Core 3+)")
+        self._logger.info("Process worker started: cv2.resize INTER_LINEAR")
+        self._logger.info("Main display loop started (Core 3+)")
 
     def stop_workers(self) -> None:
         """Stop worker processes gracefully."""
-        print("Stopping workers...")
+        self._logger.info("Stopping workers...")
         self._running_flag.value = False
 
         for proc, name in [
@@ -153,21 +161,11 @@ class CameraTFTApp:
                     proc.terminate()
                     proc.join(timeout=1)
 
-        print("All workers stopped")
-
+        self._logger.info("All workers stopped")
+    
     def check_for_input(self) -> str:
         """Check for key input (non-blocking)."""
-        if select.select([sys.stdin], [], [], 0)[0]:
-            try:
-                key = os.read(sys.stdin.fileno(), 1)
-                key_lower = key.lower()
-                if key_lower == b't':
-                    return 't'
-                elif key_lower == b'v':
-                    return 'v'
-            except Exception:
-                pass
-        return ''
+        return self._input_manager.check_for_input() or ''
 
     def show_error(self, message: str) -> None:
         """Show error message on display."""
@@ -198,8 +196,8 @@ class CameraTFTApp:
             return
 
         self._running = True
-        print("\n=== Camera TFT Display (v4.2.0 - Dual Encoder) ===")
-        print("Press 't' + Enter to capture | Press 'v' + Enter to start/stop video | Ctrl+Z to stop\n")
+        self._logger.info("=== Camera TFT Display (v4.2.1) ===")
+        self._logger.info("Press 't' + Enter to capture | Press 'v' + Enter to start/stop video | Ctrl+Z to stop")
 
         self.start_workers()
         time.sleep(1.0)
@@ -217,7 +215,11 @@ class CameraTFTApp:
                     # Image capture - trigger the capture via flag
                     self._image_capture_flag.value = 1
                     # Note: actual save happens in capture_worker
-                    print("Capturing image...")
+                    self._logger.info("Capturing image...")
+                    
+                    # Trigger capture feedback
+                    self._capture_manager.set_feedback("Saved!")
+                    self._feedback_overlay = None
 
                 elif key == 'v':
                     # Toggle video recording
@@ -225,7 +227,7 @@ class CameraTFTApp:
                         # Stop recording
                         self._video_flag.value = 2
                         self._is_recording = False
-                        print("Video recording stopped")
+                        self._logger.info("Video recording stopped")
                         self._capture_manager.set_feedback("Video Saved!")
                         self._feedback_overlay = None
                     else:
@@ -233,7 +235,7 @@ class CameraTFTApp:
                         self._video_flag.value = 1
                         self._is_recording = True
                         self._recording_start_time = time.time()
-                        print("Recording started...")
+                        self._logger.info("Recording started...")
 
                 # Get resized frame from display queue
                 try:
@@ -297,7 +299,7 @@ class CameraTFTApp:
                     self._last_fps_print = now
 
         except Exception as e:
-            print(f"\nFatal error: {e}")
+            self._logger.error(f"Fatal error: {e}")
             self.show_error("Fatal Error")
         finally:
             # Stop video if recording
@@ -309,11 +311,11 @@ class CameraTFTApp:
 
     def cleanup(self) -> None:
         """Clean up resources."""
-        print("Cleaning up...")
+        self._logger.info("Cleaning up...")
         self._display_manager.cleanup()
-        print(f"Total captures: {self._capture_count.value}")
-        print(f"Saved to: {self._config.save_directory}")
-        print("Done.")
+        self._logger.info(f"Total captures: {self._capture_count.value}")
+        self._logger.info(f"Saved to: {self._config.save_directory}")
+        self._logger.info("Done.")
 
 
 def main() -> None:
