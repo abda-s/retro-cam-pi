@@ -14,35 +14,42 @@
 
 ## Architecture
 
-### Modules (11 total)
+### Modules (16 total)
 ```
-main.py              - Orchestration, UI overlays
-camera_worker.py   - Picamera2 capture, audio recording
-process_worker.py  - cv2 resize for display
-display_manager.py - ST7735 display, frame buffering
-capture_manager.py - Image capture/save
-media_browser.py   - Browse saved files
-filter_manager.py - 7 retro filter effects
-video_filter_processor.py - Video filter with PyAV
-config_manager.py - Configuration
-input_manager.py  - Non-blocking key detection
-logger.py          - Centralized logging
+main.py               - Application orchestration
+worker_runtime.py     - Worker processes/queues/shared flags
+camera_worker.py      - Camera worker orchestration
+frame_pipeline.py     - Lores/photo frame capture pipeline
+recording_pipeline.py - Stop/merge/restart recording pipeline
+process_worker.py     - cv2 resize for display
+display_manager.py    - ST7735 display, frame buffering
+overlay_renderer.py   - Overlay image rendering helpers
+media_browser.py      - Browse saved files
+thumbnail_cache.py    - Disk + memory thumbnail cache
+filter_manager.py     - 7 retro filter effects
+audio_service.py      - Audio detect/test/record helpers
+video_service.py      - FFmpeg merge helper
+feedback_state.py     - Short-lived feedback state
+config_manager.py     - Configuration
+input_manager.py      - Non-blocking key detection
+logger.py             - Centralized logging
 ```
 
 ### Multi-Core Processing
 ```
-Core 1: capture_worker  → Camera capture, color swap
-Core 2: process_worker  → cv2.resize INTER_LINEAR
-Core 3+: main loop      → PIL convert + SPI display @ 40MHz
+Core 1: capture_worker  -> Camera + recording pipeline
+Core 2: process_worker  -> cv2.resize INTER_LINEAR
+Core 3+: main loop      -> PIL convert + SPI display @ 40MHz
 ```
 
 ### Video Processing Chain
 ```
 stop_recording()
-  └── ffmpeg_merge(video + audio) → .merged.mp4
-      └── video_filter_processor (if filter_index > 0)
-          └── apply_filter_to_video() → PyAV encoding
+  └── ffmpeg_merge(video + audio) -> final .mp4
 ```
+
+Video filters are intentionally disabled for recorded video (stability + speed).
+Filters apply to live preview and saved images.
 
 ## Performance
 
@@ -61,17 +68,17 @@ stop_recording()
 
 ## Filters
 
-Apply to live feed and saved images:
+Apply to live feed and saved images (not videos):
 
 | Index | Name | Implementation |
 |-------|------|---------------|
 | 0 | NONE | Return original |
-| 1 | SEPIA | cv2.transform with sepia kernel |
-| 2 | SILVER | CLAHE grayscale |
-| 3 | 70s FILM | Color boost + noise |
-| 4 | 80s VHS | RGB channel roll |
-| 5 | 80s VHS+ | Gaussian blur + blend + noise |
-| 6 | SUPER 8 | Vignette + warm + noise |
+| 1 | SEPIA | Sepia + fade + fine grain |
+| 2 | SILVER | CLAHE B&W + contrast + grain |
+| 3 | 70s FILM | Warm cast + halation + grain |
+| 4 | 80s VHS | Chroma shift + scanlines |
+| 5 | 80s VHS+ | Blur/bleed + jitter + scanlines + noise |
+| 6 | SUPER 8 | Vignette + warm cast + flicker + grain |
 
 ## Display Rotation
 
@@ -98,5 +105,5 @@ Key settings in `src/config_manager.py`:
 - `PIL/Pillow` - Image processing  
 - `luma.lcd` - ST7735 driver
 - `opencv-python-headless` - cv2 resize
-- `av` (PyAV) - Video encoding
+- `ffmpeg` - Audio/video merge and video thumbnails
 - `numpy` - Array operations

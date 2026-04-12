@@ -1,19 +1,15 @@
 """Video filter processor for rpi-tft-camera.
 
-Applies retro filter effects to videos using PyAV + OpenCV filters.
-Runs in background to avoid blocking camera.
-PyAV provides reliable video I/O on Raspberry Pi (bypasses OpenCV backend issues).
+Applies retro-style filters to recorded videos using ffmpeg.
+Runs in a background thread to avoid blocking live camera view.
 """
 
-import cv2
-import numpy as np
+import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Optional
 
 from logger import get_logger
-from filter_manager import FilterManager
 
 _logger = get_logger(__name__)
 
@@ -24,7 +20,7 @@ def apply_filter_to_video(
     filter_index: int,
     delete_input: bool = False,
 ) -> bool:
-    """Apply filter to video file using PyAV for I/O + OpenCV for filtering.
+    """Apply filter to video file using ffmpeg.
 
     Args:
         input_video: Path to input video (with audio)
@@ -35,13 +31,7 @@ def apply_filter_to_video(
     Returns:
         True if successful
     """
-    try:
-        import av
-    except ImportError:
-        _logger.error("PyAV not installed: pip3 install av")
-        return False
-
-    _logger.debug(f"VideoFilter: opening {input_video} with PyAV")
+    _logger.debug(f"VideoFilter: opening {input_video} with ffmpeg")
     
     # Check if file exists first
     if not input_video.exists():
@@ -57,77 +47,87 @@ def apply_filter_to_video(
     _logger.debug(f"VideoFilter: File size: {input_video.stat().st_size} bytes")
 
     try:
-        # Open input video with PyAV
-        in_container = av.open(str(input_video))
-        in_stream = in_container.streams.video[0]
-        
-        fps = int(in_stream.average_rate) if in_stream.average_rate else 30
-        width = in_stream.width
-        height = in_stream.height
-        
-        # Count total frames for progress
-        total_frames = in_stream.frames
-        if total_frames == 0:
-            # If frames not known, estimate from duration
-            total_duration = in_stream.duration
-            if total_duration:
-                total_frames = int(total_duration * fps)
-            else:
-                total_frames = 0
-        
-        _logger.debug(f"VideoFilter: {width}x{height} @ {fps}, ~{total_frames} frames")
+        if filter_index <= 0:
+            if output_video != input_video:
+                output_video.write_bytes(input_video.read_bytes())
+            if delete_input and input_video.exists() and input_video != output_video:
+                input_video.unlink()
+            return True
 
-        # Open output video
-        out_container = av.open(str(output_video), 'w')
-        
-        # Create H.264 encoder (use libx264 for compatibility)
-        out_stream = out_container.add_stream('h264', rate=fps)
-        out_stream.width = width
-        out_stream.height = height
-        out_stream.pix_fmt = 'yuv420p'
-        out_stream.options = {'preset': 'fast', 'crf': '23'}
-        
-        processed = 0
-        log_interval = 10
+        filter_map = {
+            1: "colorchannelmixer=.393:.769:.189:.0:.349:.686:.168:.0:.272:.534:.131",  # SEPIA
+            2: "hue=s=0,eq=contrast=1.35:brightness=0.02",  # SILVER
+            3: "eq=contrast=1.08:saturation=1.12:gamma=0.95,noise=alls=10:allf=t",  # 70s FILM
+            4: "chromashift=cbh=2:crh=-2,eq=saturation=0.9:contrast=1.02",  # 80s VHS
+            5: "gblur=sigma=1.0,chromashift=cbh=3:crh=-3,eq=saturation=0.9:contrast=1.05,noise=alls=8:allf=t",  # 80s VHS+
+            6: "vignette=PI/4:0.7,eq=saturation=1.08:gamma_r=0.93:gamma_g=0.97:gamma_b=1.06,noise=alls=12:allf=t",  # SUPER 8
+        }
 
-        # Process each frame
-        for packet in in_container.demux(in_stream):
-            for frame in packet.decode():
-                # Convert PyAV frame to numpy array
-                img = frame.to_ndarray(format='bgr24')
-                
-                # Apply filter using existing FilterManager
-                if filter_index > 0:
-                    img = FilterManager.apply_filter(img, filter_index)
-                
-                # Convert back to PyAV frame
-                new_frame = av.VideoFrame.from_ndarray(img, format='bgr24')
-                new_frame.pts = frame.pts
-                new_frame.time_base = frame.time_base
-                
-                # Encode and write
-                for out_packet in out_stream.encode(new_frame):
-                    out_container.mux(out_packet)
-                
-                processed += 1
-                if processed % log_interval == 0:
-                    if total_frames > 0:
-                        progress = (processed / total_frames) * 100
-                        _logger.debug(f"Filtering: {processed} frames ({progress:.0f}%)")
-                    else:
-                        _logger.debug(f"Filtering: {processed} frames")
+        vf = filter_map.get(filter_index)
+        if not vf:
+            _logger.warning(f"VideoFilter: unknown filter index {filter_index}, keeping original")
+            if output_video != input_video:
+                output_video.write_bytes(input_video.read_bytes())
+            if delete_input and input_video.exists() and input_video != output_video:
+                input_video.unlink()
+            return True
 
-        # Flush encoder
-        for out_packet in out_stream.encode():
-            out_container.mux(out_packet)
+        temp_output = output_video.with_suffix(".tmp.mp4")
+        if temp_output.exists():
+            temp_output.unlink()
 
-        # Close containers
-        out_container.close()
-        in_container.close()
+        cmd = [
+            "ffmpeg",
+            "-hide_banner",
+            "-y",
+            "-i",
+            str(input_video),
+            "-vf",
+            vf,
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "19",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "copy",
+            "-movflags",
+            "+faststart",
+            str(temp_output),
+        ]
 
-        _logger.debug(f"Video filtered: {output_video.name}")
+        start_time = time.time()
+        _logger.info(f"VideoFilter: ffmpeg start | filter={filter_index} | input={input_video.name}")
+        _logger.debug(f"VideoFilter: ffmpeg cmd: {' '.join(cmd)}")
 
-        if delete_input and input_video.exists():
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        elapsed = time.time() - start_time
+        if proc.returncode != 0:
+            stderr = proc.stderr.decode("utf-8", errors="replace")
+            _logger.error(f"VideoFilter: ffmpeg failed (rc={proc.returncode}) after {elapsed:.1f}s")
+            _logger.error(f"VideoFilter: ffmpeg stderr: {stderr[:2000]}")
+            if temp_output.exists():
+                temp_output.unlink()
+            return False
+
+        if not temp_output.exists() or temp_output.stat().st_size == 0:
+            _logger.error("VideoFilter: ffmpeg reported success but output is empty/missing")
+            if temp_output.exists():
+                temp_output.unlink()
+            return False
+
+        temp_output.replace(output_video)
+
+        _logger.info(
+            f"VideoFilter: ffmpeg complete in {elapsed:.1f}s | "
+            f"output={output_video.name} | size={output_video.stat().st_size} bytes"
+        )
+
+        if delete_input and input_video.exists() and input_video != output_video:
             input_video.unlink()
             _logger.debug(f"Deleted temp video: {input_video.name}")
 
@@ -206,11 +206,20 @@ def process_video_in_background(
         success = apply_filter_to_video(temp_video, final_video, filter_index, delete_temp)
         
         if success:
-            _logger.info(f"Video saved with filter: {final_video.name}")
+            if final_video.exists():
+                _logger.info(
+                    f"Video saved with filter: {final_video.name} "
+                    f"({final_video.stat().st_size} bytes)"
+                )
+            else:
+                _logger.warning(f"Video filter reported success but output is missing: {final_video}")
         else:
             _logger.warning(f"Filter failed, using unfiltered: {temp_video.name}")
             if not final_video.exists() and temp_video.exists():
                 temp_video.rename(final_video)
+                _logger.info(
+                    f"VideoFilter: fallback rename complete: {temp_video.name} -> {final_video.name}"
+                )
         
         # Clean up completion flag
         if completion_flag.exists():

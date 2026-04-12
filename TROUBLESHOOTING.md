@@ -88,7 +88,7 @@ arecord -L
 ```
 
 ### Video filter fails
-Known issue - PyAV muxing error. Video saves but filter not applied. This is a bug in the video_filter_processor.py, not user-fixable.
+Expected behavior: video filters are disabled. Videos are saved unfiltered for speed/stability. Filters apply to live preview and photo capture only.
 
 ## View Mode Issues
 
@@ -133,4 +133,18 @@ For detailed debugging, modify src/logger.py:
 ```python
 # Change log level from INFO to DEBUG
 level: int = logging.DEBUG,
+```
+
+Log file location:
+```bash
+~/.cache/opencode/rpi-tft-camera/app.log
+```
+
+Useful commands:
+```bash
+# Follow logs live
+tail -f ~/.cache/opencode/rpi-tft-camera/app.log
+
+# Show recent warnings/errors
+grep -E "ERROR|WARNING" ~/.cache/opencode/rpi-tft-camera/app.log | tail -n 50
 ```

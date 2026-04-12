@@ -7,7 +7,7 @@ Display live camera feed on a 128x160 TFT LCD screen with instant image capture 
 - **Live Video Feed**: Real-time camera display on 128x160 TFT (30-35 FPS)
 - **Instant Capture**: Press 't' to capture high-resolution PNG images
 - **Video Recording**: Press 'v' to record video with audio (H264 + AAC)
-- **Retro Filters**: Press 'f' to cycle through 7 vintage filters
+- **Retro Filters**: Press 'f' to cycle through 7 film-style filters (live preview + photos)
 - **View Saved Footage**: Press 'm' to browse captured media
 - **Multi-Core Optimization**: Uses 3-4 Raspberry Pi cores
 
@@ -45,18 +45,19 @@ python3 main.py
 ## Retro Filters
 
 1. **NONE** - Original camera feed
-2. **SEPIA** - Classic warm brown tones
-3. **SILVER** - 1930s-50s high contrast B&W
-4. **70s FILM** - Kodak Portra with grain
-5. **80s VHS** - Simple RGB color shift
-6. **80s VHS+** - Complex chromatic aberration
-7. **SUPER 8** - Warm vignette + film grain
+2. **SEPIA** - Sepia with mild fade and grain
+3. **SILVER** - Silver-screen B&W with grain
+4. **70s FILM** - Warm stock with soft halation
+5. **80s VHS** - Chroma shift + scanlines
+6. **80s VHS+** - Strong VHS bleed/jitter/noise
+7. **SUPER 8** - Warm vignette + flicker + grain
 
 ## File Storage
 
 - **Location**: `~/Pictures/captures/`
 - **Images**: `capture_YYYYMMDD_HHMMSS.png`
 - **Videos**: `video_YYYYMMDD_HHMMSS.mp4`
+- **Note**: Videos are saved unfiltered for speed/stability; filters apply to live view and captured images.
 
 ## Troubleshooting Quick Reference
 
@@ -67,9 +68,11 @@ python3 main.py
 | Key needs Enter | This is normal (line-buffered terminal) |
 | Application won't stop | Press Ctrl+Z (not Ctrl+C) |
 
-## Known Issues
+## Logging
 
-- **Video Filter Muxing**: Filtering recorded videos may fail with PyAV error. Video plays but filter isn't applied. This is a known PyAV issue (not user-fixable).
+- Central logger: `src/logger.py`
+- Console + file output at `~/.cache/opencode/rpi-tft-camera/app.log`
+- Default level: `INFO` (set to `DEBUG` in `src/logger.py` for verbose diagnostics)
 
 ## Requirements
 

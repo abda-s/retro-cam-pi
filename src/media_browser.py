@@ -3,7 +3,6 @@
 Handles browsing saved images and videos with thumbnail generation.
 """
 
-import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -15,7 +14,8 @@ try:
 except ImportError:
     raise ImportError("PIL not installed. Run: pip3 install pillow")
 
-import numpy as np
+from logger import get_logger
+from thumbnail_cache import ThumbnailCache
 
 
 class MediaBrowser:
@@ -34,18 +34,25 @@ class MediaBrowser:
         """
         self._save_directory = save_directory
         self._display_size = display_size
-        print(f"[MediaBrowser] Initialized with display size: {display_size}")
+        self._logger = get_logger(__name__)
+        self._logger.info(f"MediaBrowser initialized with display size: {display_size}")
 
         # Browser state
         self._files: List[Path] = []
         self._current_index: int = 0
-        self._thumbnail_cache: Dict[Path, Image.Image] = {}
         self._temp_dir: Optional[tempfile.TemporaryDirectory] = None
 
-        # Persistent disk cache for thumbnails
-        self._cache_dir: Path = save_directory / ".thumbnails"
-        self._cache_dir.mkdir(exist_ok=True)
-        print(f"[MediaBrowser] Cache directory: {self._cache_dir}")
+        self._thumbnail_cache = ThumbnailCache(
+            save_directory=save_directory,
+            display_size=display_size,
+            logger=self._logger,
+        )
+        self._logger.info(f"MediaBrowser cache directory: {self._thumbnail_cache.cache_dir}")
+
+    @property
+    def file_count(self) -> int:
+        """Return number of discovered media files."""
+        return len(self._files)
 
     def scan_directory(self) -> bool:
         """Scan save directory for media files and sort by newest first.
@@ -63,7 +70,7 @@ class MediaBrowser:
             self._files.extend(self._save_directory.glob(ext))
 
         if not self._files:
-            print(f"[MediaBrowser] No files found in {self._save_directory}")
+            self._logger.info(f"MediaBrowser: no files found in {self._save_directory}")
             return False
 
         # Sort by modification time (newest first)
@@ -73,142 +80,18 @@ class MediaBrowser:
         self._current_index = 0
 
         # Load existing cache from disk (persistent across restarts)
-        self._load_cache_from_disk()
+        self._thumbnail_cache.load_from_disk(self._files)
 
-        print(f"[MediaBrowser] Found {len(self._files)} files:")
+        self._logger.info(f"MediaBrowser: found {len(self._files)} files")
         for f in self._files[:10]:  # Show first 10
-            print(f"  - {f.name}")
+            self._logger.debug(f"MediaBrowser file: {f.name}")
         if len(self._files) > 10:
-            print(f"  ... and {len(self._files) - 10} more")
+            self._logger.debug(f"MediaBrowser: and {len(self._files) - 10} more files")
 
-        # Validate cache entries and rebuild invalid ones
-        self._validate_and_rebuild_cache()
+        # Validate cache entries
+        self._thumbnail_cache.validate(self._files)
 
         return True
-
-    def _load_cache_from_disk(self) -> None:
-        """Load existing thumbnails from disk cache."""
-        if not self._cache_dir.exists():
-            return
-
-        loaded_count = 0
-        for cache_file in self._cache_dir.glob('*.png'):
-            try:
-                # Load thumbnail from disk
-                thumbnail = Image.open(cache_file)
-
-                # Map back to original file (remove .png extension to get original name)
-                original_name = cache_file.stem  # e.g., "video_20260407_161729"
-
-                # Check all possible original file extensions
-                for ext in ['.png', '.mp4', '.mkv']:
-                    original_file = self._save_directory / (original_name + ext)
-                    if original_file.exists():
-                        self._thumbnail_cache[original_file] = thumbnail
-                        loaded_count += 1
-                        break
-                else:
-                    # Original file deleted, remove stale cache
-                    cache_file.unlink()
-                    print(f"[MediaBrowser] Removed stale cache: {cache_file.name}")
-
-            except Exception as e:
-                # Invalid cache file, remove it
-                try:
-                    cache_file.unlink()
-                    print(f"[MediaBrowser] Removed invalid cache: {cache_file.name}")
-                except Exception:
-                    pass
-
-        if loaded_count > 0:
-            print(f"[MediaBrowser] Loaded {loaded_count} thumbnails from disk cache")
-
-    def _save_to_disk_cache(self, file_path: Path, thumbnail: Image.Image) -> None:
-        """Save thumbnail to disk cache."""
-        try:
-            # Always save as PNG (regardless of original file extension)
-            # This is because video thumbnails are converted to images
-            cache_name = file_path.stem + ".png"
-            cache_path = self._cache_dir / cache_name
-            thumbnail.save(cache_path, "PNG")
-        except Exception as e:
-            print(f"[MediaBrowser] Failed to save thumbnail to cache: {e}")
-
-    def _validate_and_rebuild_cache(self) -> None:
-        """Validate cache and rebuild invalid thumbnails.
-
-        Checks all cached thumbnails against display size.
-        Removes thumbnails that don't match display dimensions.
-        Loads valid ones from disk, rebuilds invalid ones.
-        """
-        target_width, target_height = self._display_size
-        target_size = (target_width, target_height)
-
-        # First, try to load missing thumbnails from disk
-        for file_path in self._files:
-            if file_path in self._thumbnail_cache:
-                continue  # Already in memory cache
-
-            # Try to load from disk cache (thumbnails are always saved as .png)
-            cache_name = file_path.stem + ".png"
-            cache_path = self._cache_dir / cache_name
-            if cache_path.exists():
-                try:
-                    thumbnail = Image.open(cache_path)
-                    if thumbnail.size == target_size:
-                        self._thumbnail_cache[file_path] = thumbnail
-                        print(f"[MediaBrowser] Loaded from disk: {file_path.name}")
-                    else:
-                        # Wrong size, remove stale cache
-                        cache_path.unlink()
-                        print(f"[MediaBrowser] Removed stale cache (wrong size): {file_path.name}")
-                except Exception:
-                    # Invalid cache file
-                    try:
-                        cache_path.unlink()
-                    except Exception:
-                        pass
-
-        # Now validate in-memory cache
-        if not self._thumbnail_cache:
-            print(f"[MediaBrowser] No cached thumbnails (will generate on first view)")
-            return
-
-        invalid_files = []
-        valid_count = 0
-
-        print(f"[MediaBrowser] Validating {len(self._thumbnail_cache)} cached thumbnails...")
-        print(f"[MediaBrowser] Target size: {self._display_size}")
-
-        # Check each cached thumbnail
-        for file_path, thumbnail in list(self._thumbnail_cache.items()):
-            if thumbnail.size != target_size:
-                print(f"[MediaBrowser]   INVALID: {file_path.name} = {thumbnail.size}")
-                invalid_files.append(file_path)
-            else:
-                valid_count += 1
-                # Save to disk cache if not already there (save as .png)
-                cache_name = file_path.stem + ".png"
-                cache_path = self._cache_dir / cache_name
-                if not cache_path.exists():
-                    self._save_to_disk_cache(file_path, thumbnail)
-
-        # Remove invalid cached thumbnails
-        if invalid_files:
-            for file_path in invalid_files:
-                del self._thumbnail_cache[file_path]
-                # Remove stale disk cache (save as .png)
-                cache_name = file_path.stem + ".png"
-                cache_path = self._cache_dir / cache_name
-                if cache_path.exists():
-                    try:
-                        cache_path.unlink()
-                    except Exception:
-                        pass
-            print(f"[MediaBrowser] Cleared {len(invalid_files)} invalid thumbnails")
-
-        if valid_count > 0:
-            print(f"[MediaBrowser] {valid_count} cached thumbnails are valid")
 
     def get_current_file(self) -> Optional[Path]:
         """Get current file path.
@@ -269,29 +152,28 @@ class MediaBrowser:
             return None
 
         # Check cache first (silent - no logging for every frame)
-        if file_path in self._thumbnail_cache:
-            return self._thumbnail_cache[file_path]
+        cached = self._thumbnail_cache.get(file_path)
+        if cached is not None:
+            return cached
 
         try:
             file_ext = file_path.suffix.lower()
             if file_ext in ['.mkv', '.mp4']:
                 # Video: extract first frame using ffmpeg
-                print(f"[MediaBrowser] Processing VIDEO: {file_path.name}")
+                self._logger.debug(f"MediaBrowser: processing video {file_path.name}")
                 thumbnail = self._extract_video_thumbnail(file_path)
             else:
                 # Image: load and resize
                 thumbnail = self._load_image_thumbnail(file_path)
 
             if thumbnail:
-                self._thumbnail_cache[file_path] = thumbnail
-                # Save to disk cache for persistence
-                self._save_to_disk_cache(file_path, thumbnail)
+                self._thumbnail_cache.set(file_path, thumbnail)
                 return thumbnail
             else:
-                print(f"[MediaBrowser] ERROR: Failed to create thumbnail for {file_path.name}")
+                self._logger.warning(f"MediaBrowser: failed to create thumbnail for {file_path.name}")
 
         except Exception as e:
-            print(f"[MediaBrowser] Thumbnail ERROR for {file_path.name}: {e}")
+            self._logger.warning(f"MediaBrowser: thumbnail error for {file_path.name}: {e}")
 
         return None
 
@@ -306,7 +188,7 @@ class MediaBrowser:
         """
         try:
             image = Image.open(file_path)
-            print(f"[MediaBrowser] Original image size: {image.size}, mode: {image.mode}")
+            self._logger.debug(f"MediaBrowser: image size {image.size}, mode {image.mode}")
 
             # Convert to RGB if needed
             if image.mode != 'RGB':
@@ -315,12 +197,12 @@ class MediaBrowser:
             # Resize to full display dimensions (stretch to fit)
             target_size = self._display_size
             image = image.resize(target_size, Image.Resampling.LANCZOS)
-            print(f"[MediaBrowser] Resized to: {image.size}")
+            self._logger.debug(f"MediaBrowser: resized image to {image.size}")
 
             return image
 
         except Exception as e:
-            print(f"[MediaBrowser] Image load error for {file_path.name}: {e}")
+            self._logger.warning(f"MediaBrowser: image load error for {file_path.name}: {e}")
             return None
 
     def _extract_video_thumbnail(self, file_path: Path) -> Optional[Image.Image]:
@@ -338,8 +220,8 @@ class MediaBrowser:
         try:
             # Use ffmpeg to extract first frame at full display resolution
             width, height = self._display_size
-            print(f"[MediaBrowser] Extracting video thumbnail: {file_path.name}")
-            print(f"[MediaBrowser] Target size: {width}x{height}")
+            self._logger.debug(f"MediaBrowser: extracting thumbnail from {file_path.name}")
+            self._logger.debug(f"MediaBrowser: thumbnail target {width}x{height}")
 
             cmd = [
                 'ffmpeg',
@@ -354,7 +236,6 @@ class MediaBrowser:
                 '-'
             ]
 
-            print(f"[MediaBrowser] Running ffmpeg...")
             result = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -362,11 +243,11 @@ class MediaBrowser:
                 stdin=subprocess.DEVNULL
             )
 
-            print(f"[MediaBrowser] FFmpeg return code: {result.returncode}")
+            self._logger.debug(f"MediaBrowser: ffmpeg thumbnail return code {result.returncode}")
 
             if result.returncode != 0:
                 error_msg = result.stderr.decode('utf-8', errors='replace')
-                print(f"[MediaBrowser] FFmpeg error output:\n{error_msg}")
+                self._logger.warning(f"MediaBrowser: ffmpeg thumbnail error: {error_msg[:1000]}")
                 # Return fallback placeholder instead of None
                 return self._create_video_placeholder(file_path.name)
 
@@ -374,27 +255,31 @@ class MediaBrowser:
                 # Calculate expected size: width * height * 3 (RGB)
                 expected_size = width * height * 3
                 actual_size = len(result.stdout)
-                print(f"[MediaBrowser] Video output size: {actual_size} bytes (expected {expected_size})")
+                self._logger.debug(
+                    f"MediaBrowser: thumbnail bytes {actual_size} (expected {expected_size})"
+                )
 
                 if actual_size == expected_size:
                     # Convert raw bytes to PIL Image
                     image = Image.frombytes('RGB', (width, height), result.stdout)
-                    print(f"[MediaBrowser] Video thumbnail created successfully")
+                    self._logger.debug("MediaBrowser: video thumbnail created successfully")
                     return image
                 else:
-                    print(f"[MediaBrowser] ERROR: Size mismatch! expected {expected_size}, got {actual_size}")
+                    self._logger.warning(
+                        f"MediaBrowser: thumbnail size mismatch expected {expected_size}, got {actual_size}"
+                    )
                     # Return fallback placeholder
                     return self._create_video_placeholder(file_path.name)
             else:
-                print(f"[MediaBrowser] ERROR: No output from ffmpeg")
+                self._logger.warning("MediaBrowser: no output from ffmpeg thumbnail extraction")
                 return self._create_video_placeholder(file_path.name)
 
         except FileNotFoundError:
-            print("[MediaBrowser] ERROR: FFmpeg not found - video thumbnails disabled")
+            self._logger.error("MediaBrowser: ffmpeg not found - video thumbnails disabled")
             # Return fallback placeholder
             return self._create_video_placeholder(file_path.name)
         except Exception as e:
-            print(f"[MediaBrowser] Video thumbnail error: {e}")
+            self._logger.warning(f"MediaBrowser: video thumbnail error: {e}")
             import traceback
             traceback.print_exc()
             # Return fallback placeholder
@@ -443,11 +328,11 @@ class MediaBrowser:
             # Draw border
             draw.rectangle([5, 5, width-6, height-6], outline=(100, 100, 100), width=2)
 
-            print(f"[MediaBrowser] Created video placeholder for {filename}")
+            self._logger.debug(f"MediaBrowser: created video placeholder for {filename}")
             return image
 
         except Exception as e:
-            print(f"[MediaBrowser] Error creating placeholder: {e}")
+            self._logger.warning(f"MediaBrowser: error creating placeholder: {e}")
             # Last resort: return a simple gray image
             return Image.new('RGB', self._display_size, (80, 80, 80))
 
@@ -503,21 +388,10 @@ class MediaBrowser:
         try:
             # Remove from filesystem
             file_path.unlink()
-            print(f"[MediaBrowser] Deleted file: {file_path.name}")
+            self._logger.info(f"MediaBrowser: deleted file {file_path.name}")
 
             # Remove from in-memory cache
-            if file_path in self._thumbnail_cache:
-                del self._thumbnail_cache[file_path]
-
-            # Remove from disk cache
-            cache_name = file_path.stem + ".png"
-            cache_path = self._cache_dir / cache_name
-            if cache_path.exists():
-                try:
-                    cache_path.unlink()
-                    print(f"[MediaBrowser] Removed cache: {cache_name}")
-                except Exception as e:
-                    print(f"[MediaBrowser] Failed to remove cache: {e}")
+            self._thumbnail_cache.remove(file_path)
 
             # Store index before removing
             old_index = self._current_index
@@ -530,13 +404,13 @@ class MediaBrowser:
                 self._current_index = max(0, len(self._files) - 1)
             # If we deleted not the last file, stay at same index (now points to next file)
 
-            print(f"[MediaBrowser] Deleted: {file_path.name}")
+            self._logger.info(f"MediaBrowser: delete complete {file_path.name}")
             return True, "Deleted!"
 
         except PermissionError:
             return False, "Permission denied"
         except Exception as e:
-            print(f"[MediaBrowser] Delete error: {e}")
+            self._logger.warning(f"MediaBrowser: delete error: {e}")
             return False, f"Delete failed: {e}"
 
     def cleanup(self) -> None:

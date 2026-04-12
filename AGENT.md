@@ -30,24 +30,43 @@ python3 main.py
 
 ## Filters (press `f` to cycle)
 1. NONE - Original camera feed
-2. SEPIA - Classic warm brown tones
-3. SILVER - 1930s-50s high contrast B&W
-4. 70s FILM - Kodak Portra with grain
-5. 80s VHS - Simple RGB color shift
-6. 80s VHS+ - Complex chromatic aberration
-7. SUPER 8 - Warm vignette + film grain
+2. SEPIA - Sepia with mild fade and grain
+3. SILVER - Silver-screen B&W with grain
+4. 70s FILM - Warm stock with soft halation
+5. 80s VHS - Chroma shift + scanlines
+6. 80s VHS+ - Strong VHS bleed/jitter/noise
+7. SUPER 8 - Warm vignette + flicker + grain
 
 ## Output
 - Location: `~/Pictures/captures/`
-- Format: `video_YYYYMMDD_HHMMSS.mkv`
+- Images: `capture_YYYYMMDD_HHMMSS.png`
+- Videos: `video_YYYYMMDD_HHMMSS.mp4`
 
 ## Video Processing (v4.2.8)
 - Records video + audio separately
-- On stop: ffmpeg merges video + audio into .merged.mp4
-- Then applies filter if enabled (filter_index > 0)
-- Filter processing waits for ffmpeg to complete before starting
+- On stop: ffmpeg merges video + audio into final `.mp4`
+- Video filters are intentionally disabled (for speed/stability)
+- Filters apply to live preview and photo capture only
 
-### Known Issues
-- **Filter processing fails during muxing**: `[Errno 22] Invalid argument` when writing filtered video
-- Cause: PyAV `time_base` not set on output stream
-- Status: 🔄 Fix pending - need to add `time_base = Fraction(1, fps)` to output stream
+## Logging
+- Logger implementation: `src/logger.py`
+- Every module calls `get_logger(__name__)` and logs to:
+  - Console (stdout)
+  - File: `~/.cache/opencode/rpi-tft-camera/app.log`
+- Default level is `INFO`.
+
+### How to use logs on Pi
+```bash
+# Watch logs live
+tail -f ~/.cache/opencode/rpi-tft-camera/app.log
+
+# Search for errors and warnings
+grep -E "ERROR|WARNING" ~/.cache/opencode/rpi-tft-camera/app.log
+```
+
+### Enable debug logging
+Edit `src/logger.py` and change the default logger level:
+```python
+level: int = logging.DEBUG,
+```
+Then restart `python3 main.py`.
