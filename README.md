@@ -59,6 +59,10 @@ python3 main.py
 - **Videos**: `video_YYYYMMDD_HHMMSS.mp4`
 - **Note**: Videos are saved unfiltered for speed/stability; filters apply to live view and captured images.
 
+## Architecture and Flow
+
+- See `ARCHITECTURE.md` for full runtime flow, process topology, and module responsibilities.
+
 ## Troubleshooting Quick Reference
 
 | Issue | Solution |

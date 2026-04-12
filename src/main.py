@@ -93,6 +93,18 @@ class CameraTFTApp:
         self._is_recording = False
         self._recording_start_time = 0.0
 
+    def _total_saved_media_count(self) -> int:
+        """Count all saved images and videos on disk."""
+        try:
+            patterns = ("*.png", "*.mp4", "*.mkv")
+            total = 0
+            for pattern in patterns:
+                total += sum(1 for _ in self._config.save_directory.glob(pattern))
+            return total
+        except Exception as exc:
+            self._logger.warning(f"Failed to count saved media: {exc}")
+            return 0
+
     @property
     def _runtime(self) -> WorkerRuntime:
         """Typed accessor for initialized worker runtime."""
@@ -269,7 +281,7 @@ class CameraTFTApp:
                             self._feedback_overlay = create_feedback_overlay(
                                 frame_image.size,
                                 msg,
-                                self._runtime.capture_count.value,
+                                self._total_saved_media_count(),
                             )
 
                         frame_image = Image.alpha_composite(
@@ -314,7 +326,7 @@ class CameraTFTApp:
                         avg_time = sum(self._frame_times) / len(self._frame_times) if self._frame_times else 1
                         fps = 1.0 / avg_time if avg_time > 0 else 0
                         
-                        status = f"LIVE | FPS: {fps:.1f} | Captures: {self._runtime.capture_count.value}"
+                        status = f"LIVE | FPS: {fps:.1f} | Media: {self._total_saved_media_count()}"
                         skipped = self._display_manager.skipped_frames
                         if skipped > 0:
                             status += f" | Skipped: {skipped}"
@@ -383,8 +395,7 @@ class CameraTFTApp:
         """Clean up resources."""
         self._logger.info("Cleaning up...")
         self._display_manager.cleanup()
-        if self._worker_runtime is not None:
-            self._logger.info(f"Total captures: {self._runtime.capture_count.value}")
+        self._logger.info(f"Total saved media: {self._total_saved_media_count()}")
         self._logger.info(f"Saved to: {self._config.save_directory}")
         self._logger.info("Done.")
 
