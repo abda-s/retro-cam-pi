@@ -42,6 +42,19 @@ python3 main.py
 | d | - | Delete file |
 | Ctrl+Z | Exit app | Exit app |
 
+### Physical Camera Buttons (Primary Controls)
+
+- `SHUTTER` (GPIO 5): capture photo in PHOTO mode, start/stop recording in VIDEO mode
+- `MODE` (GPIO 21): toggle PHOTO/VIDEO shoot mode
+- `MODE` long-press in VIEW mode: delete current file
+- `VIEW` (GPIO 13): toggle LIVE/VIEW mode
+- `NEXT` (GPIO 19): next file in VIEW mode, next filter in LIVE mode
+- `PREV` (GPIO 26): previous file in VIEW mode, previous filter in LIVE mode
+
+Keyboard is kept as debug fallback.
+
+Note: software currently accepts MODE on GPIO 21 (primary), with fallback support for GPIO 6/16/20.
+
 ## Retro Filters
 
 1. **NONE** - Original camera feed

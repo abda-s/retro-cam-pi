@@ -35,6 +35,15 @@ from overlay_renderer import (
     create_filter_overlay,
     create_video_overlay,
 )
+from input_actions import (
+    ACTION_DELETE,
+    ACTION_LONG_TOGGLE_SHOOT_MODE,
+    ACTION_NEXT,
+    ACTION_PREV,
+    ACTION_SHUTTER,
+    ACTION_TOGGLE_SHOOT_MODE,
+    ACTION_TOGGLE_VIEW,
+)
 from worker_runtime import WorkerRuntime
 from logger import get_logger
 
@@ -51,7 +60,11 @@ class CameraTFTApp:
         self._logger.info("Initializing CameraTFTApp")
         
         # Input manager
-        self._input_manager = InputManager()
+        self._input_manager = InputManager(
+            buttons_enabled=config.buttons_enabled,
+            button_debounce_ms=config.button_debounce_ms,
+            button_long_press_ms=config.button_long_press_ms,
+        )
 
         # Display manager
         self._display_manager = DisplayManager(
@@ -93,6 +106,9 @@ class CameraTFTApp:
         self._is_recording = False
         self._recording_start_time = 0.0
 
+        # Shoot mode in live view (photo/video)
+        self._shoot_mode = "photo"
+
     def _total_saved_media_count(self) -> int:
         """Count all saved images and videos on disk."""
         try:
@@ -126,9 +142,9 @@ class CameraTFTApp:
             display_size=actual_size,
         )
 
-    def check_for_input(self) -> str:
-        """Check for key input (non-blocking)."""
-        return self._input_manager.check_for_input() or ''
+    def poll_action(self) -> Optional[str]:
+        """Poll one high-level action from input sources."""
+        return self._input_manager.poll_action()
 
     def show_error(self, message: str) -> None:
         """Show error message on display."""
@@ -151,19 +167,36 @@ class CameraTFTApp:
         self._logger.info("Returning to LIVE VIEW")
         self._feedback.set("LIVE VIEW")
 
-    def _handle_view_mode_input(self, key: str) -> None:
-        """Handle key input while browsing saved media."""
-        if key == "n":
+    def _handle_view_mode_action(self, action: str) -> None:
+        """Handle actions while browsing saved media."""
+        if action == ACTION_TOGGLE_SHOOT_MODE:
+            # Allow changing PHOTO/VIDEO while in VIEW mode.
+            # Useful for pre-selecting shoot mode before returning to LIVE.
+            self._toggle_shoot_mode()
+            return
+
+        if action == ACTION_LONG_TOGGLE_SHOOT_MODE:
+            success, message = self._media_browser.delete_current_file()
+            if success:
+                self._feedback.set("Deleted!")
+                self._logger.info("Deleted current file (MODE long press)")
+            else:
+                self._feedback.set(f"Error: {message}")
+                self._logger.warning(f"Delete failed: {message}")
+            self._feedback_overlay = None
+            return
+
+        if action == ACTION_NEXT:
             if self._media_browser.next_file():
                 current = self._media_browser.get_current_file()
                 if current is not None:
                     self._logger.info(f"Next file: {current.name}")
-        elif key == "p":
+        elif action == ACTION_PREV:
             if self._media_browser.prev_file():
                 current = self._media_browser.get_current_file()
                 if current is not None:
                     self._logger.info(f"Prev file: {current.name}")
-        elif key == "d":
+        elif action == ACTION_DELETE:
             success, message = self._media_browser.delete_current_file()
             if success:
                 self._feedback.set("Deleted!")
@@ -173,48 +206,94 @@ class CameraTFTApp:
                 self._logger.warning(f"Delete failed: {message}")
             self._feedback_overlay = None
 
-    def _handle_live_mode_input(self, key: str) -> None:
-        """Handle key input while in live camera mode."""
-        if key == "t":
+    def _cycle_filter(self, step: int = 1) -> None:
+        """Cycle filter index with wrapping."""
+        current = self._runtime.filter_index.value
+        self._runtime.filter_index.value = (current + step) % len(self._filter_names)
+        filter_name = self._filter_names[self._runtime.filter_index.value]
+        self._logger.info(f"Filter: {filter_name}")
+        self._filter_feedback_timer = time.time()
+        self._filter_overlay = None
+
+    def _toggle_shoot_mode(self) -> None:
+        """Toggle between photo and video modes."""
+        if self._is_recording:
+            self._logger.info("Ignoring mode toggle while recording")
+            return
+
+        self._shoot_mode = "video" if self._shoot_mode == "photo" else "photo"
+        label = "VIDEO" if self._shoot_mode == "video" else "PHOTO"
+        self._feedback.set(f"MODE: {label}")
+        self._feedback_overlay = None
+        self._logger.info(f"Shoot mode: {label}")
+
+    def _handle_shutter(self) -> None:
+        """Handle shutter action based on shoot mode."""
+        if self._shoot_mode == "photo":
             self._runtime.request_image_capture()
             self._logger.info("Capturing image...")
             self._feedback.set("Saved!")
             self._feedback_overlay = None
             return
 
-        if key == "v":
-            if self._is_recording:
-                self._runtime.stop_video_recording()
-                self._is_recording = False
-                self._logger.info("Video recording stopped")
-                self._feedback.set("Video Saved!")
-                self._feedback_overlay = None
-            else:
-                self._runtime.start_video_recording()
-                self._is_recording = True
-                self._recording_start_time = time.time()
-                self._logger.info("Recording started...")
+        if self._is_recording:
+            self._runtime.stop_video_recording()
+            self._is_recording = False
+            self._logger.info("Video recording stopped")
+            self._feedback.set("Video Saved!")
+            self._feedback_overlay = None
+        else:
+            self._runtime.start_video_recording()
+            self._is_recording = True
+            self._recording_start_time = time.time()
+            self._logger.info("Recording started...")
+
+    def _handle_live_mode_action(self, action: str) -> None:
+        """Handle actions while in live camera mode."""
+        if action == ACTION_SHUTTER:
+            self._handle_shutter()
             return
 
-        if key == "f":
-            current = self._runtime.filter_index.value
-            self._runtime.filter_index.value = (current + 1) % len(self._filter_names)
-            filter_name = self._filter_names[self._runtime.filter_index.value]
-            self._logger.info(f"Filter: {filter_name}")
-            self._filter_feedback_timer = time.time()
-            self._filter_overlay = None
+        if action == ACTION_TOGGLE_SHOOT_MODE:
+            self._toggle_shoot_mode()
+            return
 
-    def _handle_key_input(self, key: str) -> None:
-        """Route key input based on current app mode."""
-        if key == "m":
+        if action == ACTION_NEXT:
+            self._cycle_filter(step=1)
+            return
+
+        if action == ACTION_PREV:
+            self._cycle_filter(step=-1)
+
+    def _handle_action(self, action: Optional[str]) -> None:
+        """Route actions based on current app mode."""
+        if action is None:
+            return
+
+        if action == ACTION_TOGGLE_VIEW:
+            self._logger.info("Action: toggle view mode")
             self._toggle_mode()
             return
 
         if self._view_mode:
-            self._handle_view_mode_input(key)
+            self._logger.debug(f"Action routed to VIEW mode: {action}")
+            self._handle_view_mode_action(action)
             return
 
-        self._handle_live_mode_input(key)
+        self._logger.debug(f"Action routed to LIVE mode: {action}")
+        self._handle_live_mode_action(action)
+
+    def _build_live_status(self, fps: float) -> str:
+        """Build status line for live mode."""
+        mode_label = "PHOTO" if self._shoot_mode == "photo" else "VIDEO"
+        status = f"LIVE | {mode_label} | FPS: {fps:.1f} | Media: {self._total_saved_media_count()}"
+        skipped = self._display_manager.skipped_frames
+        if skipped > 0:
+            status += f" | Skipped: {skipped}"
+        if self._is_recording:
+            rec_duration = int(time.time() - self._recording_start_time)
+            status += f" | REC: {rec_duration}s"
+        return status
 
     def run(self) -> None:
         """Run the main application loop."""
@@ -229,7 +308,9 @@ class CameraTFTApp:
 
         self._running = True
         self._logger.info("=== Camera TFT Display (v4.2.7) ===")
-        self._logger.info("Press 't' + Enter to capture | Press 'v' + Enter to start/stop video | Press 'm' + Enter to toggle view mode | Ctrl+Z to stop")
+        self._logger.info("Physical buttons are primary controls")
+        self._logger.info("VIEW mode delete: long press MODE button")
+        self._logger.info("Debug keys: t/v=shutter | c=mode | m=view | n/p=navigate/filter | d=delete | x=long-mode")
 
         self._runtime.start(self._logger)
         time.sleep(1.0)
@@ -240,10 +321,9 @@ class CameraTFTApp:
             while self._running:
                 loop_start = time.time()
 
-                # Handle key input
-                key = self.check_for_input()
-
-                self._handle_key_input(key)
+                # Handle input action
+                action = self.poll_action()
+                self._handle_action(action)
 
                 # Render based on current mode
                 if self._view_mode:
@@ -326,13 +406,7 @@ class CameraTFTApp:
                         avg_time = sum(self._frame_times) / len(self._frame_times) if self._frame_times else 1
                         fps = 1.0 / avg_time if avg_time > 0 else 0
                         
-                        status = f"LIVE | FPS: {fps:.1f} | Media: {self._total_saved_media_count()}"
-                        skipped = self._display_manager.skipped_frames
-                        if skipped > 0:
-                            status += f" | Skipped: {skipped}"
-                        if self._is_recording:
-                            rec_duration = int(time.time() - self._recording_start_time)
-                            status += f" | REC: {rec_duration}s"
+                        status = self._build_live_status(fps)
                     
                     print(status)
                     if not self._view_mode:
@@ -349,6 +423,7 @@ class CameraTFTApp:
 
             if self._worker_runtime is not None:
                 self._runtime.stop(self._logger)
+            self._input_manager.cleanup()
             self.cleanup()
             # Clean up media browser (if initialized)
             if self._media_browser:

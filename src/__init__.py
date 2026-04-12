@@ -24,8 +24,18 @@ from .overlay_renderer import create_feedback_overlay, create_filter_overlay, cr
 from .worker_runtime import WorkerRuntime
 from .frame_pipeline import capture_lores_frame, capture_and_save_main_frame
 from .recording_pipeline import run_stop_pipeline
+from .button_input import ButtonInputSource
 from .audio_service import AudioRecorder, detect_usb_audio_device, test_audio_device
 from .video_service import ffmpeg_merge
+from .input_actions import (
+    ACTION_SHUTTER,
+    ACTION_TOGGLE_SHOOT_MODE,
+    ACTION_LONG_TOGGLE_SHOOT_MODE,
+    ACTION_TOGGLE_VIEW,
+    ACTION_NEXT,
+    ACTION_PREV,
+    ACTION_DELETE,
+)
 from .video_filter_processor import apply_filter_to_video, process_video_in_background
 
 __version__ = "4.2.8"
@@ -44,6 +54,14 @@ __all__ = [
     "capture_lores_frame",
     "capture_and_save_main_frame",
     "run_stop_pipeline",
+    "ButtonInputSource",
+    "ACTION_SHUTTER",
+    "ACTION_TOGGLE_SHOOT_MODE",
+    "ACTION_LONG_TOGGLE_SHOOT_MODE",
+    "ACTION_TOGGLE_VIEW",
+    "ACTION_NEXT",
+    "ACTION_PREV",
+    "ACTION_DELETE",
     "AudioRecorder",
     "detect_usb_audio_device",
     "test_audio_device",

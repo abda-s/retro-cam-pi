@@ -206,10 +206,8 @@ class DisplayManager:
                 print(f"Display cleanup warning: {e}")
             self._display = None
 
-        try:
-            GPIO.cleanup()
-        except Exception:
-            pass
+        # Do not call global GPIO.cleanup() here.
+        # Button input uses GPIO as well and is cleaned by InputManager.
 
     def draw_browser_overlay(
         self,

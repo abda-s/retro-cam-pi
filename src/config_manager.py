@@ -49,6 +49,11 @@ class Config:
         self.browser_font_size: int = 10
         self.show_file_index: bool = True
 
+        # Physical button settings
+        self.buttons_enabled: bool = True
+        self.button_debounce_ms: int = 80
+        self.button_long_press_ms: int = 1200
+
         # Ensure save directory exists
         self.save_directory.mkdir(parents=True, exist_ok=True)
 

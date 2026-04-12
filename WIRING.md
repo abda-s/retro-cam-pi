@@ -21,6 +21,32 @@ Complete wiring for ST7735R TFT display to Raspberry Pi.
 | 7 | CS | Chip Select (CE0) | Pin 24 | 8 |
 | 8 | LED | Backlight | Pin 1 | - |
 
+## Physical Button Wiring (Retro Camera Controls)
+
+Use active-low wiring with internal pull-ups:
+
+- One side of each button to GPIO pin
+- Other side of each button to GND
+- App config uses `GPIO.PUD_UP` and treats LOW as "pressed"
+
+| Control | GPIO | Pin |
+|---------|------|-----|
+| SHUTTER | 5 | 29 |
+| MODE (PHOTO/VIDEO) | 21 | 40 |
+| VIEW (LIVE/VIEW) | 13 | 33 |
+| NEXT | 19 | 35 |
+| PREV | 26 | 37 |
+
+Recommended ground: Pin 39 (common ground rail for all buttons)
+
+Behavior note:
+- MODE short press toggles PHOTO/VIDEO in LIVE mode
+- MODE long press deletes current file in VIEW mode
+
+Implementation note:
+- MODE primary pin is GPIO 21 in current build.
+- MODE fallback pins supported in software: GPIO 6, GPIO 16, GPIO 20.
+
 ## Wiring Diagram
 
 ```

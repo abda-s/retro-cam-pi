@@ -19,13 +19,20 @@ python3 main.py
 ```
 
 ## Controls
-- `v` + Enter: Start/stop video+audio recording
-- `t` + Enter: Capture image
-- `f` + Enter: Cycle through retro filters
-- `m` + Enter: Toggle Live View / View Saved Footage mode
-- `n` + Enter: Next file (in View Mode)
-- `p` + Enter: Previous file (in View Mode)
-- `d` + Enter: Delete current file (in View Mode)
+- Physical controls are primary:
+  - SHUTTER (GPIO 5): capture / start-stop video
+  - MODE (GPIO 21): toggle PHOTO/VIDEO
+  - MODE long press (VIEW mode): delete current file
+  - VIEW (GPIO 13): toggle LIVE/VIEW
+  - NEXT (GPIO 19): next file / next filter
+  - PREV (GPIO 26): prev file / prev filter
+- Keyboard is debug fallback:
+  - `t`/`v`: shutter
+  - `c`: mode toggle
+  - `m`: live/view toggle
+  - `n`/`p`: next/prev
+  - `d`: delete current file
+  - `x`: simulate mode long press
 - Ctrl+Z: Stop app
 
 ## Filters (press `f` to cycle)
