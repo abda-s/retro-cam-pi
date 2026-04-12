@@ -5,9 +5,11 @@
 - Password: `4625`
 
 ## Sync Local → Pi
+After updating code, use rsync to update the Pi:
 ```bash
 sshpass -p '4625' rsync -av --delete /home/abdas/rpi-tft-camera/src/ cam@192.168.1.112:~/rpi-tft-camera/src/
 ```
+**abdas will test the updated code on the Pi**
 
 ## Run on Pi
 ```bash

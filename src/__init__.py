@@ -8,7 +8,6 @@ Modules:
     - display_manager: ST7735 display handling
     - capture_manager: Image capture/save
     - config_manager: Configuration loading
-    - shared: Constants and types
     - main: Application orchestration
 """
 
@@ -20,7 +19,7 @@ from .config_manager import Config, ConfigLoader
 from .filter_manager import FilterManager
 from .video_filter_processor import apply_filter_to_video, process_video_in_background
 
-__version__ = "4.2.7"
+__version__ = "4.2.8"
 __all__ = [
     "capture_worker",
     "process_worker",
