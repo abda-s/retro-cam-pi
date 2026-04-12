@@ -41,7 +41,7 @@ class Config:
         self.video_bitrate: int = 3_000_000  # 3 Mbps
         self.video_codec: str = "h264"
         self.video_format: str = "mkv"
-        self.audio_device: str = "hw:2,0"  # ALSA device for USB mic
+        self.audio_device: str = "hw:CARD=Device,DEV=0"  # ALSA device for USB mic (auto-detected)
         self.audio_enabled: bool = True
         self.audio_sync: float = -0.3  # Audio sync offset in seconds
 

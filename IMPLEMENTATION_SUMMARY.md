@@ -241,8 +241,132 @@ Note: ffmpeg must be installed on the Pi (already required for audio recording).
 
 ## Version
 
-- **Version**: 4.2.6
-- **Release Date**: 2026-04-07
-- **Lines of code added**: ~550
-- **Files modified**: 5
-- **Files created**: 1
+- **Version**: 4.2.8
+- **Release Date**: 2026-04-12
+- **Lines of code modified**: ~100
+- **Files modified**: 2
+
+---
+
+# Video Processing with Filter - Implementation Summary
+
+## Overview
+Implemented video + audio recording with separate processing chain (v4.2.8).
+
+### Version History
+- **v4.2.8**: Video processing with filter chaining (current)
+
+## Files Modified
+
+### 1. `src/camera_worker.py`
+- Fixed indentation throughout file
+- Fixed `ffmpeg_merge()` to return `thread` object (was broken - undefined variable reference)
+- Added `import threading` at top of file
+- Function now properly returns the thread for chaining
+
+### 2. `src/video_filter_processor.py`
+- Changed PyAV FPS detection from `in_stream.rate` to `in_stream.average_rate`
+- Added fallback value (30 fps) when average_rate is None
+- Fixed: `fps = int(in_stream.average_rate) if in_stream.average_rate else 30`
+
+## Video Processing Chain
+
+```
+stop_recording()
+  │
+  ├── 1. ffmpeg_merge(video_path, audio_path, temp_merged)
+  │     - Runs in background thread
+  │     - Merges video + audio using ffmpeg
+  │     - Creates .complete flag on success
+  │     - Returns thread object
+  │     - Deletes original files after merge
+  │
+  └── 2. process_video_in_background(temp_merged, final_path, filter_index)
+        - Receives ffmpeg_thread
+        - Waits for thread.is_alive() == False (max 30 seconds)
+        - Checks .complete flag
+        - Then runs apply_filter_to_video()
+              - Opens video with PyAV
+              - Reads fps from average_rate
+              - Applies filter frame by frame
+              - Saves to .mp4
+```
+
+### Chain Working (confirmed from logs)
+```
+08:51:12 | FFmpeg merge thread started
+08:51:12 | VideoFilter: Waiting for ffmpeg to finish...
+08:51:15 | FFmpeg merge complete
+08:51:15 | VideoFilter: ffmpeg thread finished after 2.5s
+08:51:15 | VideoFilter: ffmpeg complete flag found
+```
+
+## Known Issue: Muxing Error
+
+### Error
+```
+av.error.ValueError: [Errno 22] Invalid argument: '...filtered.mp4'
+  at out_container.mux(out_packet)
+```
+
+### Root Cause
+Output stream `time_base` is not configured.
+
+### Fix (Pending)
+Add to `apply_filter_to_video()` in `video_filter_processor.py`:
+```python
+from fractions import Fraction
+
+out_stream = out_container.add_stream('h264', rate=fps)
+out_stream.width = width
+out_stream.height = height
+out_stream.pix_fmt = 'yuv420p'
+out_stream.time_base = Fraction(1, fps)  # ADD THIS
+```
+
+## Code Changes
+
+### camera_worker.py Changes
+```python
+# BEFORE (broken):
+def ffmpeg_merge(video_path, audio_path, output_path) -> None:
+    ...
+    def run_ffmpeg():
+        ...
+        return thread  # ERROR: thread not defined in this scope
+    
+    thread = threading.Thread(target=run_ffmpeg, daemon=False)
+    thread.start()
+    # Never returns anything!
+
+# AFTER (fixed):
+def ffmpeg_merge(video_path, audio_path, output_path) -> threading.Thread:
+    ...
+    def run_ffmpeg():
+        ...
+        return  # Just return cleanly
+    
+    thread = threading.Thread(target=run_ffmpeg, daemon=False)
+    thread.start()
+    return thread  # Proper return
+```
+
+### video_filter_processor.py Changes
+```python
+# BEFORE (broken):
+fps = in_stream.rate  # AttributeError: 'VideoStream' has no 'rate'
+
+# AFTER (fixed):
+fps = int(in_stream.average_rate) if in_stream.average_rate else 30
+```
+
+## Testing Results
+
+| Test | Status |
+|------|--------|
+| Video recording start | ✅ Works |
+| Audio recording | ✅ Works |
+| FFmpeg merge | ✅ Works |
+| Thread chaining | ✅ Works |
+| Filter processing start | ❌ Fails at muxing |
+| Complete pipeline | ❌ Pending fix |

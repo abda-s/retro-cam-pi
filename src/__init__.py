@@ -17,8 +17,10 @@ from .process_worker import process_worker
 from .display_manager import DisplayManager
 from .capture_manager import CaptureManager
 from .config_manager import Config, ConfigLoader
+from .filter_manager import FilterManager
+from .video_filter_processor import apply_filter_to_video, process_video_in_background
 
-__version__ = "4.0.0"
+__version__ = "4.2.7"
 __all__ = [
     "capture_worker",
     "process_worker",
@@ -26,4 +28,7 @@ __all__ = [
     "CaptureManager",
     "Config",
     "ConfigLoader",
+    "FilterManager",
+    "apply_filter_to_video",
+    "process_video_in_background",
 ]

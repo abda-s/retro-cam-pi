@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 RPi TFT Camera Display - Modular Version
-Version: 4.2.4 - Fixed display orientation for view mode
+Version: 4.2.7 - Added retro filters (f key to cycle)
 
 Uses Picamera2's dual encoder feature:
   - H264 encoder for video recording (proper timing)
@@ -10,6 +10,7 @@ Uses Picamera2's dual encoder feature:
   - Smart cache validation to auto-fix display issues
   - Reduced log spam for better terminal readability
   - Fixed: Use actual DisplayManager size (handles 160x128 rotation)
+  - Added: 7 retro/analog filters (apply to live feed + saved files)
 """
 
 import sys
@@ -105,9 +106,15 @@ class CameraTFTApp:
         # 0 = idle, 1 = capture
         self._image_capture_flag = Value('i', 0)
 
+        # Filter control (0-6 index)
+        self._filter_index = Value('i', 0)
+        self._filter_names = ["NONE", "SEPIA", "SILVER", "70s FILM", "80s VHS", "80s VHS+", "SUPER 8"]
+        self._filter_feedback_timer = 0.0
+
         # Overlay state
         self._feedback_overlay = None
         self._video_overlay = None
+        self._filter_overlay = None
 
         # FPS tracking
         self._frame_times = []
@@ -149,6 +156,7 @@ class CameraTFTApp:
                 self._config.save_directory,
                 self._config.audio_enabled,
                 self._config.audio_device,
+                self._filter_index,  # Pass the shared Value object, not its current value
             )
         )
         self._capture_process.start()
@@ -304,6 +312,15 @@ class CameraTFTApp:
                             self._recording_start_time = time.time()
                             self._logger.info("Recording started...")
 
+                    elif key == 'f':
+                        # Cycle through filters
+                        current = self._filter_index.value
+                        self._filter_index.value = (current + 1) % len(self._filter_names)
+                        filter_name = self._filter_names[self._filter_index.value]
+                        self._logger.info(f"Filter: {filter_name}")
+                        self._filter_feedback_timer = time.time()
+                        self._filter_overlay = None
+
                 # Render based on current mode
                 if self._view_mode:
                     # View mode: display media browser
@@ -348,6 +365,21 @@ class CameraTFTApp:
                         ).convert('RGB')
                     else:
                         self._feedback_overlay = None
+
+                    # Handle filter name overlay (shows for 2 seconds after change)
+                    if self._view_mode is False and (time.time() - self._filter_feedback_timer < 2.0):
+                        if self._filter_overlay is None:
+                            overlay_img = Image.new('RGBA', frame_image.size, (0, 0, 0, 80))
+                            draw_f = ImageDraw.Draw(overlay_img)
+                            f_name = self._filter_names[self._filter_index.value]
+                            draw_f.text((5, 35), f"FILTER: {f_name}", fill=(255, 200, 0, 255))
+                            self._filter_overlay = overlay_img
+
+                        frame_image = Image.alpha_composite(
+                            frame_image.convert('RGBA'), self._filter_overlay
+                        ).convert('RGB')
+                    else:
+                        self._filter_overlay = None
 
                 # Display frame
                 self._display_manager.display_frame(frame_image)

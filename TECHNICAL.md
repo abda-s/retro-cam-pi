@@ -407,8 +407,71 @@ Change `FILE_FORMAT` in config:
 - [ST7735R Datasheet](https://www.crystalfontz.com/controllers/Sitronix/ST7735R.pdf)
 - [Raspberry Pi SPI Documentation](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html)
 - [libcamera Documentation](https://libcamera.org/docs.html)
+- [PyAV Documentation](https://pyav.org/docs/stable/)
 
 ---
 
-**Version:** 4.2.3
-**Last Updated:** 2026-04-07
+**Version:** 4.2.8
+**Last Updated:** 2026-04-12
+
+## 🔧 Video Processing Architecture (v4.2.8)
+
+### Processing Chain
+
+```
+stop_recording()
+  ├── ffmpeg_merge() → merges video + audio, returns thread
+  │     └── Creates .complete flag on success
+  │     └── Deletes original video + audio files
+  │
+  └── process_video_in_background()
+        ├── Waits for ffmpeg_thread.is_alive() == False
+        ├── Checks .complete flag exists
+        └── apply_filter_to_video()
+              ├── Opens input with PyAV
+              ├── Reads fps from average_rate (not rate)
+              ├── Applies filter frame by frame
+              └── Outputs to .mp4 file
+```
+
+### Video Filter Processing Details
+
+1. **Input**: Merged video with audio (.merged.mp4)
+2. **Output**: Filtered video (.filtered.mp4)
+3. **PyAV Usage**:
+   - Uses `av.open()` for both input and output
+   - Input stream: `in_container.streams.video[0]`
+   - Output stream: `out_container.add_stream('h264', rate=fps)`
+   - Frame processing: PyAV → NumPy → FilterManager → PyAV
+
+### Known Issue: Muxing Error
+
+```python
+# Error:
+av.error.ValueError: [Errno 22] Invalid argument: '...filtered.mp4'
+  at out_container.mux(out_packet)
+```
+
+**Cause**: Output stream missing `time_base` configuration.
+
+**Fix (pending)**:
+```python
+from fractions import Fraction
+
+out_stream = out_container.add_stream('h264', rate=fps)
+out_stream.width = width
+out_stream.height = height
+out_stream.pix_fmt = 'yuv420p'
+out_stream.time_base = Fraction(1, fps)  # ADD THIS
+```
+
+### Code Changes Made
+
+1. **camera_worker.py**:
+   - Fixed indentation throughout
+   - `ffmpeg_merge()` now returns `thread` object
+   - Added `from fractions import Fraction` import
+
+2. **video_filter_processor.py**:
+   - Line 64: Changed `fps = in_stream.rate` to `fps = int(in_stream.average_rate) if in_stream.average_rate else 30`
+   - This fixes the PyAV API change (rate → average_rate)

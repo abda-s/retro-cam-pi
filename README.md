@@ -356,10 +356,26 @@ For detailed technical information, see:
 
 ---
 
-**Version:** 4.2.7
-**Last Updated:** 2026-04-07
+**Version:** 4.2.8
+**Last Updated:** 2026-04-12
 
-## 🎉 New in v4.2.7
+## 🎉 New in v4.2.8
+
+### Video Processing with Filter
+- **Video + audio recording**: Records video and audio separately
+- **FFmpeg merge**: On stop, merges video + audio into .merged.mp4
+- **Filter chaining**: Filter processing waits for ffmpeg to complete before starting
+- **Background processing**: Video filter runs in background thread
+
+#### Known Issues
+- **Filter processing fails during muxing**: PyAV `[Errno 22] Invalid argument` error when writing filtered video
+- **Cause**: Output stream `time_base` not properly configured
+- **Fix**: Add `time_base = Fraction(1, fps)` to output stream in video_filter_processor.py
+- **Status**: 🔄 Pending fix
+
+### Code Fixes Applied
+1. Fixed `camera_worker.py`: Corrected indentation issues, `ffmpeg_merge()` now returns thread
+2. Fixed `video_filter_processor.py`: Changed `fps = in_stream.rate` to `fps = int(in_stream.average_rate) else 30`
 
 ### View Mode Delete Functionality
 - **Delete files**: Press 'd' to delete current file while in View Mode
