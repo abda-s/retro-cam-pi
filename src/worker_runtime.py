@@ -60,6 +60,7 @@ class WorkerRuntime:
                 self._config.audio_enabled,
                 self._config.audio_device,
                 self._filter_index,
+                self._config.camera_rotation,
             ),
         )
         self._capture_process.start()

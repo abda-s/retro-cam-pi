@@ -22,8 +22,9 @@ class Config:
         self.spi_speed_hz: int = 40_000_000
 
         # Camera settings
-        self.capture_resolution: Tuple[int, int] = (640, 480)  # main stream for photo/video
-        self.lores_resolution: Tuple[int, int] = (128, 160)   # lores stream for display (matches display)
+        self.capture_resolution: Tuple[int, int] = (480, 640)  # main stream for photo/video (swapped for rotated camera)
+        self.lores_resolution: Tuple[int, int] = (128, 160)   # lores stream for display
+        self.camera_rotation: int = 270  # rotation applied in code (0, 90, 180, 270)
 
         # Queue settings
         self.queue_maxsize: int = 2
@@ -37,7 +38,7 @@ class Config:
         self.feedback_duration: float = 2.0
 
         # Video recording settings
-        self.video_resolution: Tuple[int, int] = (640, 480)
+        self.video_resolution: Tuple[int, int] = (480, 640)  # video capture resolution (swapped for rotated camera)
         self.video_bitrate: int = 3_000_000  # 3 Mbps
         self.video_codec: str = "h264"
         self.video_format: str = "mkv"

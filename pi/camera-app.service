@@ -1,0 +1,14 @@
+[Unit]
+Description=Camera App
+After=basic.target
+Requires=basic.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/cam/rpi-tft-camera/src
+ExecStart=/usr/bin/python3 /home/cam/rpi-tft-camera/src/main.py
+Restart=always
+User=cam
+
+[Install]
+WantedBy=multi-user.target

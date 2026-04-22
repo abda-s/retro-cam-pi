@@ -132,8 +132,12 @@ class ThumbnailCache:
 
     def _resolve_original_file(self, stem: str) -> Optional[Path]:
         """Resolve thumbnail stem back to source media file path."""
-        for ext in (".png", ".mp4", ".mkv"):
-            candidate = self._save_directory / f"{stem}{ext}"
-            if candidate.exists():
-                return candidate
+        # Check for _done.mp4 first (completed videos)
+        candidate = self._save_directory / f"{stem}_done.mp4"
+        if candidate.exists():
+            return candidate
+        # Check for .png (photos)
+        candidate = self._save_directory / f"{stem}.png"
+        if candidate.exists():
+            return candidate
         return None

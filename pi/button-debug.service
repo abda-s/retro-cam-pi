@@ -1,0 +1,14 @@
+[Unit]
+Description=Button Debugger - TFT button test
+After=graphical.target
+
+[Service]
+Type=simple
+User=cam
+WorkingDirectory=/home/cam/rpi-tft-camera/src
+ExecStart=/usr/bin/python3 /home/cam/rpi-tft-camera/src/button_debug.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

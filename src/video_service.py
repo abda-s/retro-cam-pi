@@ -13,23 +13,31 @@ from logger import get_logger
 _logger = get_logger(__name__)
 
 
-def ffmpeg_merge(video_path: Path, audio_path: Path, output_path: Path) -> threading.Thread:
-    """Merge video and audio using ffmpeg in background."""
+def ffmpeg_merge(video_path: Path, audio_path: Path, output_path: Path, rotation: int = 0, on_complete: callable = None) -> threading.Thread:
+    """Merge video and audio using ffmpeg in background.
+    
+    Args:
+        video_path: Path to input video file (.mp4)
+        audio_path: Path to input audio file (.wav)
+        output_path: Path for output merged file (.mp4)
+        rotation: Rotation to apply (0, 90, 180, 270)
+        on_complete: Optional callback called when merge completes (success or failure)
+                     Callback receives (success: bool, output_path: Path)
+        
+    Returns:
+        Thread object (runs in background)
+    """
     video_path = video_path.resolve()
     audio_path = audio_path.resolve()
     output_path = output_path.resolve()
 
-    if output_path.suffix != ".mp4":
-        output_path = output_path.with_suffix(".mp4")
-
     _logger.info(f"FFmpeg: Starting merge to {output_path.name}")
-    _logger.debug(f"FFmpeg: video={video_path.name}, audio={audio_path.name}")
-
-    completion_flag = output_path.with_suffix(".complete")
+    _logger.debug(f"FFmpeg: video={video_path.name}, audio={audio_path.name}, rotation={rotation}")
 
     def run_ffmpeg():
         max_retries = 3
         retry_delay = 0.5
+        success = False
 
         for attempt in range(max_retries):
             if attempt > 0:
@@ -50,6 +58,16 @@ def ffmpeg_merge(video_path: Path, audio_path: Path, output_path: Path) -> threa
                     return
 
             _logger.debug("FFmpeg: Running ffmpeg command...")
+            
+            # Build ffmpeg command with optional rotation filter
+            vf_filter = None
+            if rotation == 90:
+                vf_filter = "transpose=1"  # 90° clockwise
+            elif rotation == 180:
+                vf_filter = "transpose=2,transpose=2"  # 180°
+            elif rotation == 270:
+                vf_filter = "transpose=2"  # 90° counter-clockwise
+            
             cmd = [
                 "ffmpeg",
                 "-hide_banner",
@@ -58,8 +76,16 @@ def ffmpeg_merge(video_path: Path, audio_path: Path, output_path: Path) -> threa
                 str(video_path),
                 "-i",
                 str(audio_path),
+            ]
+            
+            if vf_filter:
+                cmd.extend(["-vf", vf_filter])
+            
+            cmd.extend([
                 "-c:v",
-                "copy",
+                "libx264",
+                "-preset",
+                "fast",
                 "-c:a",
                 "aac",
                 "-map",
@@ -68,7 +94,7 @@ def ffmpeg_merge(video_path: Path, audio_path: Path, output_path: Path) -> threa
                 "1:a",
                 "-shortest",
                 str(output_path),
-            ]
+            ])
 
             _logger.debug(f"FFmpeg cmd: {' '.join(cmd)}")
 
@@ -80,13 +106,30 @@ def ffmpeg_merge(video_path: Path, audio_path: Path, output_path: Path) -> threa
 
             if proc.returncode == 0:
                 _logger.info(f"FFmpeg merge complete: {output_path.name}")
-                completion_flag.touch()
+                success = True
+                # Cleanup original files after successful merge
                 if video_path.exists():
-                    video_path.unlink()
-                    _logger.debug("FFmpeg: Deleted original video")
+                    try:
+                        video_path.unlink()
+                        _logger.debug(f"Deleted original video: {video_path.name}")
+                    except Exception as exc:
+                        _logger.warning(f"Failed to delete original video: {exc}")
                 if audio_path.exists():
-                    audio_path.unlink()
-                    _logger.debug("FFmpeg: Deleted original audio")
+                    try:
+                        audio_path.unlink()
+                        _logger.debug(f"Deleted audio: {audio_path.name}")
+                    except Exception as exc:
+                        _logger.warning(f"Failed to delete audio: {exc}")
+                
+                # Call completion callback for success BEFORE returning
+                _logger.debug(f"Calling completion callback: on_complete={'Yes' if on_complete else 'No'}, success={success}")
+                if on_complete:
+                    try:
+                        on_complete(success, output_path)
+                        _logger.debug("Completion callback executed successfully")
+                    except Exception as exc:
+                        _logger.error(f"Completion callback error: {exc}")
+                
                 return
 
             error_msg = proc.stderr.decode("utf-8", errors="replace").strip()
@@ -104,6 +147,15 @@ def ffmpeg_merge(video_path: Path, audio_path: Path, output_path: Path) -> threa
         _logger.error(f"FFmpeg merge FAILED after {max_retries} attempts")
         if audio_path.exists():
             _logger.warning(f"WAV file kept: {audio_path}")
+        
+        # Call the completion callback if provided
+        _logger.debug(f"Calling completion callback: on_complete={'Yes' if on_complete else 'No'}, success={success}")
+        if on_complete:
+            try:
+                on_complete(success, output_path)
+                _logger.debug("Completion callback executed successfully")
+            except Exception as exc:
+                _logger.error(f"Completion callback error: {exc}")
 
     thread = threading.Thread(target=run_ffmpeg, daemon=False)
     thread.start()

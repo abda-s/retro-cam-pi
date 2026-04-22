@@ -1,7 +1,9 @@
 """Recording stop/restart pipeline for camera worker."""
 
+import subprocess
 import threading
 import time
+from pathlib import Path
 
 from picamera2 import Picamera2
 
@@ -40,19 +42,70 @@ def run_stop_pipeline(worker, logger) -> None:
 
         logger.debug("Step 5: Saving video without filter")
 
+        rotation = getattr(worker, '_camera_rotation', 0)
+        
         if audio_path and audio_path.exists() and video_path:
-            temp_merged = video_path.with_suffix(".merged.mp4")
-            ffmpeg_merge(video_path, audio_path, temp_merged)
-
-            final_path = video_path.with_suffix(".mp4")
-            if temp_merged.exists():
-                temp_merged.rename(final_path)
+            # Use temp output file to avoid conflict with existing video file
+            # Note: Use string formatting since with_suffix() requires dot prefix
+            final_path = video_path.parent / f"{video_path.stem}_done.mp4"
+            temp_path = video_path.parent / f"{video_path.stem}_merged.mp4"
+            
+            # Define callback to handle post-merge operations
+            def on_merge_complete(success: bool, output_path: Path) -> None:
+                logger.debug(f"Merge complete callback: success={success}, output={output_path.name}")
+                if success and output_path.exists():
+                    try:
+                        # Rename temp file to final _done.mp4
+                        output_path.rename(final_path)
+                        logger.info(f"Renamed to final: {final_path.name}")
+                    except Exception as exc:
+                        logger.error(f"Failed to rename merged file: {exc}")
+                else:
+                    logger.warning(f"Merge failed or output not found: success={success}, exists={output_path.exists() if output_path else 'N/A'}")
+            
+            # Start merge in background (non-blocking) with callback
+            logger.debug(f"Starting ffmpeg merge: {temp_path.name}")
+            ffmpeg_merge(video_path, audio_path, temp_path, rotation, on_merge_complete)
+            
+            # Note: merge runs in background. After completion, ffmpeg will delete
+            # original .mp4 and .wav files, then callback renames _merged to _done.
+            # Media browser only shows *_done.mp4 files, so incomplete videos hidden.
         else:
             logger.warning("Step 5b: No audio to merge - processing video without audio")
             if video_path is not None:
-                final_path = video_path.with_suffix(".mp4")
-                if video_path.exists() and video_path != final_path:
-                    video_path.rename(final_path)
+                final_path = video_path.parent / f"{video_path.stem}_done.mp4"
+                
+                # Apply rotation to video if needed (non-blocking)
+                if rotation > 0:
+                    temp_rotated = video_path.parent / f"{video_path.stem}_rotated.mp4"
+                    
+                    def run_rotation():
+                        try:
+                            vf_filter = f"transpose={2 if rotation == 270 else 1}" if rotation in (90, 270) else "transpose=2,transpose=2"
+                            subprocess.run([
+                                "ffmpeg", "-y", "-i", str(video_path),
+                                "-vf", vf_filter,
+                                "-c:v", "libx264", "-preset", "fast",
+                                "-c:a", "copy", str(temp_rotated)
+                            ], capture_output=True, timeout=120)
+                            if temp_rotated.exists():
+                                video_path.unlink()
+                                temp_rotated.rename(final_path)
+                                logger.debug(f"Rotation complete: {final_path.name}")
+                            else:
+                                logger.warning("Rotation failed - temp file not created")
+                        except Exception as exc:
+                            logger.warning(f"Video rotation failed: {exc}")
+                            if video_path.exists():
+                                video_path.rename(final_path)
+                    
+                    # Run rotation in background thread
+                    threading.Thread(target=run_rotation, daemon=True).start()
+                    logger.debug("Started background rotation")
+                else:
+                    # No rotation needed, just rename to _done
+                    if video_path.exists():
+                        video_path.rename(final_path)
 
         logger.debug("Step 6: Restarting camera...")
         try:

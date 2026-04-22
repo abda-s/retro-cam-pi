@@ -65,9 +65,12 @@ class MediaBrowser:
 
         self._files = []
 
-        # Find all PNG, MKV, and MP4 files
-        for ext in ['*.png', '*.mkv', '*.mp4']:
-            self._files.extend(self._save_directory.glob(ext))
+        # Find all PNG files (photos)
+        self._files.extend(self._save_directory.glob('*.png'))
+
+        # Find only _done.mp4 files (completed videos)
+        # This prevents race condition: don't show _merged.mp4 while it's being processed
+        self._files.extend(self._save_directory.glob('*_done.mp4'))
 
         if not self._files:
             self._logger.info(f"MediaBrowser: no files found in {self._save_directory}")
@@ -115,7 +118,7 @@ class MediaBrowser:
 
         stat = file_path.stat()
         file_ext = file_path.suffix.lower()
-        file_type = 'video' if file_ext in ['.mkv', '.mp4'] else 'image'
+        file_type = 'video' if file_ext == '.mp4' else 'image'
 
         return {
             'filename': file_path.name,
@@ -158,12 +161,12 @@ class MediaBrowser:
 
         try:
             file_ext = file_path.suffix.lower()
-            if file_ext in ['.mkv', '.mp4']:
+            if file_ext in ['.mp4']:
                 # Video: extract first frame using ffmpeg
                 self._logger.debug(f"MediaBrowser: processing video {file_path.name}")
                 thumbnail = self._extract_video_thumbnail(file_path)
             else:
-                # Image: load and resize
+                # Image (PNG): load and resize
                 thumbnail = self._load_image_thumbnail(file_path)
 
             if thumbnail:
@@ -335,6 +338,49 @@ class MediaBrowser:
             self._logger.warning(f"MediaBrowser: error creating placeholder: {e}")
             # Last resort: return a simple gray image
             return Image.new('RGB', self._display_size, (80, 80, 80))
+
+    def _create_processing_placeholder(self) -> Image.Image:
+        """Create placeholder for video still being processed (ffmpeg merge).
+
+        Returns:
+            PIL Image placeholder with "Processing..." message
+        """
+        try:
+            width, height = self._display_size
+            from PIL import ImageDraw
+
+            # Create dark blue background
+            image = Image.new('RGB', (width, height), (20, 30, 60))
+            draw = ImageDraw.Draw(image)
+
+            # Draw "Processing..." text
+            text = "Processing..."
+            text_bbox = draw.textbbox((0, 0), text)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
+            text_x = (width - text_width) // 2
+            text_y = (height - text_height) // 2 - 10
+            draw.text((text_x, text_y), text, fill=(100, 150, 255))
+
+            # Draw spinning indicator (simple animated dots)
+            import time
+            dot_count = int(time.time()) % 3 + 1
+            dots = "." * dot_count
+            dot_text = f"Merge{dots}"
+            dot_bbox = draw.textbbox((0, 0), dot_text)
+            dot_width = dot_bbox[2] - dot_bbox[0]
+            dot_x = (width - dot_width) // 2
+            dot_y = text_y + text_height + 10
+            draw.text((dot_x, dot_y), dot_text, fill=(150, 180, 220))
+
+            # Draw border
+            draw.rectangle([5, 5, width-6, height-6], outline=(60, 100, 180), width=2)
+
+            return image
+
+        except Exception as e:
+            self._logger.warning(f"MediaBrowser: error creating processing placeholder: {e}")
+            return Image.new('RGB', self._display_size, (20, 30, 60))
 
     def next_file(self) -> bool:
         """Move to next file.

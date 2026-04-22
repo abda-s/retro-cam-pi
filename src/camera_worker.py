@@ -15,6 +15,7 @@ try:
     from picamera2 import Picamera2
     from picamera2.encoders import H264Encoder
     from picamera2.outputs import PyavOutput
+    from libcamera import Transform
 except ImportError:
     raise ImportError("picamera2 not installed")
 
@@ -34,11 +35,12 @@ class CameraWorker:
     def __init__(
         self,
         capture_resolution: Tuple[int, int] = (640, 480),
-        lores_resolution: Tuple[int, int] = (128, 160),
+        lores_resolution: Tuple[int, int] = (160, 128),
         save_directory: Path = None,
         audio_enabled: bool = True,
         audio_device: str = "hw:CARD=Device,DEV=0",
         filter_index: Value = None,
+        camera_rotation: int = 0,
     ):
         self._capture_resolution = capture_resolution
         self._lores_resolution = lores_resolution
@@ -62,6 +64,7 @@ class CameraWorker:
                 _logger.warning(f"Audio device test FAILED: {self._audio_device} - videos will be silent")
         
         self._filter_index = filter_index
+        self._camera_rotation = camera_rotation
         
         self._camera: Optional[Picamera2] = None
         self._encoder: Optional[H264Encoder] = None
@@ -122,12 +125,12 @@ class CameraWorker:
     def capture_lores_frame(self) -> Optional[np.ndarray]:
         """Capture a frame from lores stream for display."""
         filter_value = self._filter_index.value if self._filter_index is not None else 0
-        return capture_lores_frame(self._camera, filter_value)
+        return capture_lores_frame(self._camera, filter_value, self._camera_rotation)
     
     def capture_and_save_main_frame(self, filename: Path) -> bool:
         """Capture a frame from main stream and save to file."""
         filter_value = self._filter_index.value if self._filter_index is not None else 0
-        return capture_and_save_main_frame(self._camera, filename, filter_value, _logger)
+        return capture_and_save_main_frame(self._camera, filename, filter_value, self._camera_rotation, _logger)
     
     def stop(self):
         """Stop camera and encoder."""
@@ -156,6 +159,7 @@ def capture_worker(
     audio_enabled: bool = True,
     audio_device: str = "hw:2,0",
     filter_index: Value = None,
+    camera_rotation: int = 0,
 ) -> None:
     """Capture frames from camera with dual stream support."""
     camera: Optional[CameraWorker] = None
@@ -168,6 +172,7 @@ def capture_worker(
             audio_enabled=audio_enabled,
             audio_device=audio_device,
             filter_index=filter_index,
+            camera_rotation=camera_rotation,
         )
         
         if not camera.start():
